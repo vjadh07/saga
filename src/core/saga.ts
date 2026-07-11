@@ -1,8 +1,20 @@
 import type { Ledger } from "../ledger/ledger.js";
-import type { ActionState, LedgerEvent } from "../ledger/types.js";
+import type { ActionState, EventType, LedgerEvent } from "../ledger/types.js";
+import { TERMINAL_STATES } from "../ledger/types.js";
 import type { VendorAdapter } from "../vendors/types.js";
-import { SagaExecutionError } from "./errors.js";
+import { CompensationError, SagaExecutionError } from "./errors.js";
 import { mintActionId } from "./ids.js";
+
+export interface Receipt {
+  sagaId: string;
+  status: "committed" | "compensated" | "mixed" | "in_flight";
+  actions: {
+    actionId: string;
+    type: string;
+    state: EventType;
+    timeline: { event: EventType; at: string }[];
+  }[];
+}
 
 export interface StagedAction {
   actionId: string;
@@ -119,6 +131,10 @@ export class Saga {
       return this.execute(action.actionId);
     }
 
+    if (inFlight.state === "COMPENSATION_CALLED") {
+      return this.compensateAction(inFlight);
+    }
+
     // CALLED or RECONCILED: ask the world what actually happened first
     const landed = await this.reconcileOrPark(action, vendor);
     this.record({
@@ -202,5 +218,84 @@ export class Saga {
       `action ${actionId} did not land after ${Saga.MAX_ATTEMPTS} attempts`,
       actionId,
     );
+  }
+
+  // unwind: newest commit first, and every COMPENSATED needs ground truth
+  // confirming the effect is gone. Resumable: rerunning cancel picks up
+  // parked COMPENSATION_CALLED actions and untouched COMMITTED ones.
+  async cancel(sagaId: string): Promise<ActionState[]> {
+    const commitSeq = (a: ActionState) =>
+      a.events.find((e) => e.event === "COMMITTED")?.seq ?? 0;
+    const targets = this.ledger
+      .actions(sagaId)
+      .filter((a) => a.state === "COMMITTED" || a.state === "COMPENSATION_CALLED")
+      .sort((x, y) => commitSeq(y) - commitSeq(x));
+
+    const done: ActionState[] = [];
+    for (const target of targets) {
+      done.push(await this.compensateAction(target));
+    }
+    return done;
+  }
+
+  private async compensateAction(state: ActionState): Promise<ActionState> {
+    const action = this.findAction(state.actionId);
+    const vendor = this.vendorFor(action);
+
+    if (state.state !== "COMPENSATION_CALLED") {
+      this.record({
+        sagaId: action.sagaId,
+        actionId: action.actionId,
+        event: "COMPENSATION_CALLED",
+        payload: {},
+      });
+    }
+
+    try {
+      await vendor.compensate(action);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new CompensationError(
+        `compensation failed for ${action.actionId}: ${msg}`,
+        action.actionId,
+      );
+    }
+
+    const landed = await this.reconcileOrPark(action, vendor);
+    if (landed) {
+      throw new CompensationError(
+        `world still shows the effect of ${action.actionId} after compensation`,
+        action.actionId,
+      );
+    }
+
+    this.record({
+      sagaId: action.sagaId,
+      actionId: action.actionId,
+      event: "COMPENSATED",
+      payload: {},
+    });
+    return this.actionState(action.actionId, action.sagaId);
+  }
+
+  receipt(sagaId: string): Receipt {
+    const actions = this.ledger.actions(sagaId);
+    const states = actions.map((a) => a.state);
+    let status: Receipt["status"];
+    if (states.some((s) => !TERMINAL_STATES.has(s))) status = "in_flight";
+    else if (states.every((s) => s === "COMMITTED")) status = "committed";
+    else if (states.every((s) => s === "COMPENSATED")) status = "compensated";
+    else status = "mixed";
+
+    return {
+      sagaId,
+      status,
+      actions: actions.map((a) => ({
+        actionId: a.actionId,
+        type: String(a.staged.type ?? ""),
+        state: a.state,
+        timeline: a.events.map((e) => ({ event: e.event, at: e.at })),
+      })),
+    };
   }
 }

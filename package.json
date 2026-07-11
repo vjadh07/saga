@@ -9,7 +9,8 @@
     "vendors": "tsx scripts/vendors.ts",
     "viewer": "tsx scripts/viewer.ts",
     "agent": "tsx scripts/agent.ts",
-    "reset": "tsx scripts/reset.ts"
+    "reset": "tsx scripts/reset.ts",
+    "gcal-auth": "tsx scripts/gcal-auth.ts"
   },
   "license": "MIT",
   "devDependencies": {
@@ -20,6 +21,7 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.207",
+    "googleapis": "^173.0.0",
     "zod": "^4.4.3"
   }
 }

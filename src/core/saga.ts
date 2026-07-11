@@ -89,36 +89,62 @@ export class Saga {
     return state;
   }
 
+  // decision table: the vendor call's response is never trusted on its own.
+  // Only a reconcile against ground truth can produce COMMITTED.
+  private static readonly MAX_ATTEMPTS = 2;
+
   async execute(actionId: string): Promise<ActionState> {
     const action = this.findAction(actionId);
     const vendor = this.vendorFor(action);
 
-    this.record({
-      sagaId: action.sagaId,
-      actionId,
-      event: "CALLED",
-      payload: {},
-    });
-    await vendor.call(action);
-    const verdict = await vendor.reconcile(actionId);
-    this.record({
-      sagaId: action.sagaId,
-      actionId,
-      event: "RECONCILED",
-      payload: { landed: verdict.landed },
-    });
-    if (!verdict.landed) {
-      throw new SagaExecutionError(
-        `action ${actionId} did not land and cannot be committed`,
+    for (let attempt = 1; attempt <= Saga.MAX_ATTEMPTS; attempt++) {
+      this.record({
+        sagaId: action.sagaId,
         actionId,
-      );
+        event: "CALLED",
+        payload: { attempt },
+      });
+
+      let callError: string | undefined;
+      try {
+        await vendor.call(action);
+      } catch (err) {
+        callError = err instanceof Error ? err.message : String(err);
+      }
+
+      let landed: boolean;
+      try {
+        landed = (await vendor.reconcile(actionId)).landed;
+      } catch (err) {
+        // no ground truth means no verdict: park at CALLED, recoverable later
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new SagaExecutionError(
+          `ground truth unavailable for ${actionId}: ${msg}`,
+          actionId,
+        );
+      }
+
+      this.record({
+        sagaId: action.sagaId,
+        actionId,
+        event: "RECONCILED",
+        payload: callError === undefined ? { landed } : { landed, callError },
+      });
+
+      if (landed) {
+        this.record({
+          sagaId: action.sagaId,
+          actionId,
+          event: "COMMITTED",
+          payload: {},
+        });
+        return this.actionState(actionId, action.sagaId);
+      }
     }
-    this.record({
-      sagaId: action.sagaId,
+
+    throw new SagaExecutionError(
+      `action ${actionId} did not land after ${Saga.MAX_ATTEMPTS} attempts`,
       actionId,
-      event: "COMMITTED",
-      payload: {},
-    });
-    return this.actionState(actionId, action.sagaId);
+    );
   }
 }

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>saga ledger</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #30363d; --text: #e6edf3; --dim: #8b949e;
+    --staged: #8b949e; --called: #d29922; --reconciled: #58a6ff;
+    --committed: #3fb950; --compensation_called: #f0883e; --compensated: #bc8cff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--line);
+           display: flex; align-items: baseline; gap: 12px; }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: 1px; }
+  header span { color: var(--dim); font-size: 12px; }
+  main { padding: 16px 20px; max-width: 960px; }
+  .empty { color: var(--dim); padding: 40px 0; text-align: center; }
+  .action { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+            padding: 12px 16px; margin-bottom: 12px; }
+  .action-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .type { font-weight: 700; }
+  .id { color: var(--dim); font-size: 12px; }
+  .badge { margin-left: auto; padding: 2px 10px; border-radius: 999px; font-size: 12px;
+           font-weight: 700; color: var(--bg); }
+  .timeline { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+  .step { display: flex; align-items: center; gap: 6px; }
+  .step .ev { font-size: 12px; padding: 1px 8px; border-radius: 4px;
+              border: 1px solid var(--line); color: var(--dim); }
+  .step .at { font-size: 11px; color: var(--dim); }
+  .step .arrow { color: var(--line); }
+  .step.latest .ev { color: var(--text); border-color: currentColor; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SAGA</h1>
+  <span>append-only ledger, live</span>
+  <span id="stat" style="margin-left:auto"></span>
+</header>
+<main id="list"><div class="empty">no actions on the ledger yet</div></main>
+<script>
+const COLORS = {
+  STAGED: "var(--staged)", CALLED: "var(--called)", RECONCILED: "var(--reconciled)",
+  COMMITTED: "var(--committed)", COMPENSATION_CALLED: "var(--compensation_called)",
+  COMPENSATED: "var(--compensated)",
+};
+
+function clock(iso) { return iso.slice(11, 23); }
+
+function render(data) {
+  const list = document.getElementById("list");
+  document.getElementById("stat").textContent =
+    data.events.length + " events / " + data.actions.length + " actions";
+  if (data.actions.length === 0) {
+    list.innerHTML = '<div class="empty">no actions on the ledger yet</div>';
+    return;
+  }
+  list.innerHTML = data.actions.map((a) => {
+    const steps = a.events.map((e, i) => {
+      const latest = i === a.events.length - 1 ? " latest" : "";
+      const arrow = i > 0 ? '<span class="arrow">&#8594;</span>' : "";
+      return arrow + '<span class="step' + latest + '"><span class="ev">' + e.event +
+        '</span><span class="at">' + clock(e.at) + "</span></span>";
+    }).join("");
+    return '<div class="action"><div class="action-head">' +
+      '<span class="type">' + (a.staged.type ?? "?") + "</span>" +
+      '<span class="id">' + a.actionId + " / " + a.sagaId + "</span>" +
+      '<span class="badge" style="background:' + (COLORS[a.state] ?? "var(--dim)") + '">' +
+      a.state + "</span></div>" +
+      '<div class="timeline">' + steps + "</div></div>";
+  }).join("");
+}
+
+async function tick() {
+  try {
+    const res = await fetch("/api/ledger");
+    render(await res.json());
+  } catch {
+    document.getElementById("stat").textContent = "viewer disconnected";
+  }
+}
+tick();
+setInterval(tick, 500);
+</script>
+</body>
+</html>

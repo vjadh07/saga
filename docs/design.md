@@ -19,7 +19,7 @@ Because every transition is durably written before the risky step it precedes, S
 
 ## Architecture
 
-TypeScript on Node, Vitest for tests, better-sqlite3 for durability. Two processes plus a viewer:
+TypeScript on Node, Vitest for tests, SQLite via Node's built-in node:sqlite for durability (no native build step). Two processes plus a viewer:
 
 1. `src/ledger/`: the append-only event log in SQLite (WAL mode). Events are inserted, never updated. Current action state is derived by folding events. This is the system of record and the thing that survives kill -9.
 2. `src/core/`: the Saga engine. Staging (idempotency key minting), the executor (drives the state machine), the reconciler (queries vendor ground truth and decides landed vs not-landed), recovery (scan ledger for in-flight actions on startup), and the compensator (reverse-order unwind).

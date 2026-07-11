@@ -1,5 +1,6 @@
 // Wipe ledger and vendor state so a rehearsal starts from zero.
-import { rmSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
+import { wipeLedger } from "../src/ledger/ledger.js";
 
 const base = process.env.VENDOR_URL ?? "http://127.0.0.1:4100";
 try {
@@ -11,7 +12,7 @@ try {
   }
   console.log("vendor server not running, removed its database files");
 }
-for (const f of ["data/ledger.db", "data/ledger.db-wal", "data/ledger.db-shm"]) {
-  rmSync(f, { force: true });
-}
+// in place, never unlink: a running viewer must see the empty ledger
+mkdirSync("data", { recursive: true });
+wipeLedger(process.env.LEDGER_PATH ?? "data/ledger.db");
 console.log("ledger wiped");

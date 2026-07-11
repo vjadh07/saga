@@ -22,6 +22,27 @@ function toEvent(r: Row): LedgerEvent {
   };
 }
 
+// Empty the ledger in place instead of unlinking the file: open connections
+// (the viewer) follow the old inode after an unlink and would go blind.
+export function wipeLedger(path: string): void {
+  const db = new DatabaseSync(path);
+  db.exec("PRAGMA journal_mode = WAL");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS events (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT,
+      saga_id TEXT NOT NULL,
+      action_id TEXT NOT NULL,
+      event TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      at TEXT NOT NULL
+    )
+  `);
+  db.exec("DELETE FROM events");
+  db.exec("DELETE FROM sqlite_sequence WHERE name = 'events'");
+  db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+  db.close();
+}
+
 export class Ledger {
   private db: DatabaseSync;
 

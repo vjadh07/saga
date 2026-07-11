@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
-import { Ledger } from "../src/ledger/ledger.js";
+import { Ledger, wipeLedger } from "../src/ledger/ledger.js";
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -87,6 +87,23 @@ test("events survive close and reopen of the same file", () => {
   const events = second.events("t1");
   expect(events).toHaveLength(1);
   expect(events[0]!.payload).toEqual({ p: 1 });
+});
+
+test("wipe empties the file in place, an already-open reader sees it", () => {
+  const path = tempDb();
+  const writer = new Ledger(path);
+  const reader = new Ledger(path); // stays open across the wipe, like the viewer
+  cleanups.push(() => writer.close(), () => reader.close());
+
+  writer.append({ sagaId: "t1", actionId: "a1", event: "STAGED", payload: {} });
+  expect(reader.events()).toHaveLength(1);
+
+  wipeLedger(path);
+  expect(reader.events()).toEqual([]);
+
+  // seq restarts from 1, the wiped file is indistinguishable from a fresh one
+  const e = writer.append({ sagaId: "t1", actionId: "a2", event: "STAGED", payload: {} });
+  expect(e.seq).toBe(1);
 });
 
 test("appends are visible to a second open handle on the same file", () => {

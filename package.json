@@ -1,0 +1,21 @@
+{
+  "name": "saga",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The transaction layer for AI agents",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "vendors": "tsx scripts/vendors.ts",
+    "viewer": "tsx scripts/viewer.ts",
+    "agent": "tsx scripts/agent.ts",
+    "reset": "tsx scripts/reset.ts"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

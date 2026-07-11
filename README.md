@@ -1,5 +1,7 @@
-# hackathon project
+# saga
 
-Fresh repo for a 4-5 day hackathon build. Brief: "build an AI agent."
+The transaction layer for AI agents.
 
-Idea selection is in progress. See HANDOFF.md for the current state.
+Agents are starting to touch money and irreversible actions (book, pay, send, cancel). When one crashes halfway through, the world is left double-charged or half-finished. Saga stages every action, verifies it against ground truth, and commits or rolls it back, on an append-only ledger, so an agent can crash mid-task, restart, reconcile, and finish clean.
+
+Hackathon build in progress. Design spec landing in docs/ next, see HANDOFF.md for state.

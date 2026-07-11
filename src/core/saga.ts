@@ -96,8 +96,74 @@ export class Saga {
   async execute(actionId: string): Promise<ActionState> {
     const action = this.findAction(actionId);
     const vendor = this.vendorFor(action);
+    return this.attemptLoop(action, vendor, 1);
+  }
 
-    for (let attempt = 1; attempt <= Saga.MAX_ATTEMPTS; attempt++) {
+  // recovery: finish every in-flight action of a saga, exactly-once.
+  // STAGED is declared intent, so it executes. CALLED or beyond means side
+  // effects may exist in the world, so ground truth is consulted before any
+  // re-call.
+  async recover(sagaId: string): Promise<ActionState[]> {
+    const recovered: ActionState[] = [];
+    for (const inFlight of this.ledger.inFlight(sagaId)) {
+      recovered.push(await this.recoverAction(inFlight));
+    }
+    return recovered;
+  }
+
+  private async recoverAction(inFlight: ActionState): Promise<ActionState> {
+    const action = this.findAction(inFlight.actionId);
+    const vendor = this.vendorFor(action);
+
+    if (inFlight.state === "STAGED") {
+      return this.execute(action.actionId);
+    }
+
+    // CALLED or RECONCILED: ask the world what actually happened first
+    const landed = await this.reconcileOrPark(action, vendor);
+    this.record({
+      sagaId: action.sagaId,
+      actionId: action.actionId,
+      event: "RECONCILED",
+      payload: { landed, recovered: true },
+    });
+    if (landed) {
+      this.record({
+        sagaId: action.sagaId,
+        actionId: action.actionId,
+        event: "COMMITTED",
+        payload: {},
+      });
+      return this.actionState(action.actionId, action.sagaId);
+    }
+
+    const attemptsUsed = inFlight.events.filter((e) => e.event === "CALLED").length;
+    return this.attemptLoop(action, vendor, attemptsUsed + 1);
+  }
+
+  private async reconcileOrPark(
+    action: StagedAction,
+    vendor: VendorAdapter,
+  ): Promise<boolean> {
+    try {
+      return (await vendor.reconcile(action.actionId)).landed;
+    } catch (err) {
+      // no ground truth means no verdict: park at CALLED, recoverable later
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new SagaExecutionError(
+        `ground truth unavailable for ${action.actionId}: ${msg}`,
+        action.actionId,
+      );
+    }
+  }
+
+  private async attemptLoop(
+    action: StagedAction,
+    vendor: VendorAdapter,
+    startAttempt: number,
+  ): Promise<ActionState> {
+    const actionId = action.actionId;
+    for (let attempt = startAttempt; attempt <= Saga.MAX_ATTEMPTS; attempt++) {
       this.record({
         sagaId: action.sagaId,
         actionId,
@@ -112,17 +178,7 @@ export class Saga {
         callError = err instanceof Error ? err.message : String(err);
       }
 
-      let landed: boolean;
-      try {
-        landed = (await vendor.reconcile(actionId)).landed;
-      } catch (err) {
-        // no ground truth means no verdict: park at CALLED, recoverable later
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new SagaExecutionError(
-          `ground truth unavailable for ${actionId}: ${msg}`,
-          actionId,
-        );
-      }
+      const landed = await this.reconcileOrPark(action, vendor);
 
       this.record({
         sagaId: action.sagaId,

@@ -56,7 +56,7 @@ async function committedTrip(vendor: WorldVendor, count: number) {
   const saga = new Saga({ ledger, vendors: { v: vendor } });
   const ids: string[] = [];
   for (let i = 0; i < count; i++) {
-    const staged = saga.stage({ sagaId: "t", type: `step${i}.do`, vendor: "v", params: {} });
+    const staged = saga.stage({ sagaId: "t", type: `step${i}.do`, vendor: "v", params: { step: i } });
     await saga.execute(staged.actionId);
     ids.push(staged.actionId);
   }
@@ -127,6 +127,9 @@ test("receipt summarizes saga status, action states, and timelines", async () =>
   expect(before.status).toBe("committed");
   expect(before.actions).toHaveLength(2);
   expect(before.actions[0]!.type).toBe("step0.do");
+  // staged params ride along: they are the only place the details live,
+  // and the agent needs them to reason about what was actually booked
+  expect(before.actions[0]!.params).toEqual({ step: 0 });
   expect(before.actions[0]!.timeline.map((t) => t.event)).toEqual([
     "STAGED",
     "CALLED",

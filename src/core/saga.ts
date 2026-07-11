@@ -11,6 +11,7 @@ export interface Receipt {
   actions: {
     actionId: string;
     type: string;
+    params: Record<string, unknown>;
     state: EventType;
     timeline: { event: EventType; at: string }[];
   }[];
@@ -293,6 +294,7 @@ export class Saga {
       actions: actions.map((a) => ({
         actionId: a.actionId,
         type: String(a.staged.type ?? ""),
+        params: (a.staged.params ?? {}) as Record<string, unknown>,
         state: a.state,
         timeline: a.events.map((e) => ({ event: e.event, at: e.at })),
       })),

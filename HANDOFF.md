@@ -4,7 +4,9 @@ Shared notes so any agent (Claude Code or Codex) can pick this up cold.
 
 ## Current state
 - Idea LOCKED: Saga, the transaction layer for AI agents. A council of 3 judge subagents (infra engineer, devtools VC, demo director lenses) voted 3-0 for Saga over Understory and Baton. No pivots from here.
-- Repo initialized with README, .gitignore, this file. No app code yet.
+- Public repo live: https://github.com/vjadh07/saga
+- Scope decisions (Viraj picked): Google Calendar is the ONE real integration, agent brain is the Claude Agent SDK riding the local Claude Code login, demo surface is terminal plus a read-only web ledger viewer.
+- Stack: TypeScript on Node, Vitest, better-sqlite3 for the ledger. Design spec committed at docs/design.md. No app code yet.
 - Council's shared warning: the kill -9 recovery moment is the demo's single point of failure. The crash must trigger at a deterministic step against canned mock-vendor responses, rehearsed, never manual timing.
 
 ## Working with Codex
@@ -13,9 +15,9 @@ Shared notes so any agent (Claude Code or Codex) can pick this up cold.
 - Do not enable the plugin's review gate, it can loop and drain usage limits.
 
 ## Next
-- Scope questions out to Viraj: which real integration, how the LLM is authed, demo surface, push to GitHub or not.
-- Then a short docs/design.md spec and a bite-sized test-first docs/plan.md.
-- Then TDD build, commit per passing test.
+- Write the bite-sized test-first plan at docs/plan.md.
+- Then TDD build in plan order: ledger, core engine, mock vendors, recovery, compensation, agent, viewer, calendar leg last.
+- Google Calendar OAuth setup needs Viraj in the loop (one-time Google Cloud clicking), schedule it when the adapter lands.
 
 ## Standing rules (do not violate)
 - No em dashes anywhere: code, comments, docs, chat. Plain student tone.

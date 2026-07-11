@@ -6,6 +6,12 @@
 .env.*
 !.env.example
 
+# local state (ledger + vendor databases)
+data/
+
+# secrets
+.secrets/
+
 # node
 node_modules/
 dist/

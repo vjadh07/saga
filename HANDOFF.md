@@ -7,8 +7,12 @@ Shared notes so any agent (Claude Code or Codex) can pick this up cold.
 - Public repo live: https://github.com/vjadh07/saga
 - Scope decisions (Viraj picked): Google Calendar is the ONE real integration, agent brain is the Claude Agent SDK riding the local Claude Code login, demo surface is terminal plus a read-only web ledger viewer.
 - Stack: TypeScript on Node >= 22.5 (node:sqlite), Vitest, ESM. Design spec at docs/design.md, task plan at docs/plan.md.
-- Plan Tasks 0 through 11 are DONE: ledger, engine (stage, execute, reconcile, recover, cancel, receipt), mock vendor server, http adapter, real kill -9 crash test, agent tool handlers, and the live Agent SDK booking agent. 40 tests green across 11 files.
+- Plan Tasks 0 through 14 are DONE: ledger, engine (stage, execute, reconcile, recover, cancel, receipt), mock vendor server, http adapter, real kill -9 crash test, agent tool handlers, live Agent SDK booking agent, ledger viewer, Google Calendar adapter, demo runbook (docs/demo.md) and README. 49 tests green across 13 files.
+- Two engine changes landed during demo rehearsal: reset now wipes the ledger in place (wipeLedger) because unlinking the file left a running viewer reading the dead inode, and receipts now carry each action's staged params because trip_status without them forced the model to ask the user for dates it should have known.
 - Council's shared warning: the kill -9 recovery moment is the demo's single point of failure. The crash must trigger at a deterministic step against canned mock-vendor responses, rehearsed, never manual timing.
+
+## Rehearsal record (2026-07-11)
+The docs/demo.md script was executed three times against the mock calendar. Run 1 completed all three acts and surfaced the two engine fixes above (act 2 was retaken after the receipt fix). Runs 2 and 3 were clean top to bottom with the final code. Every run converged to the same final state: flight.book, hotel.book, calendar.add all COMPENSATED after act 3, vendor oracle empty, and the act 1 crash always landed as flight COMMITTED plus hotel CALLED with no hotel row at the vendor.
 
 ## Task 11 smoke run (observed 2026-07-11, verbatim tool lines)
 Vendors on 4100, state reset, then `npm run agent -- "book me a one way flight from PHX to SFO next friday"`:
@@ -39,9 +43,8 @@ The model's closing chat summary is elided here (it styles with em dashes); it c
 - Do not enable the plugin's review gate, it can loop and drain usage limits.
 
 ## Next
-- Task 12: read-only ledger viewer (API + polling page), TDD per docs/plan.md.
-- Task 13: Google Calendar adapter with an injected fake client in tests. The one-time OAuth setup (Google Cloud client + consent click) needs Viraj in the loop; schedule it when the adapter lands.
-- Task 14: demo runbook, README, rehearse the full crash demo twice back to back.
+- Google Calendar OAuth, the ONLY open build item, needs Viraj at a browser once: create a Google Cloud OAuth desktop client with the Calendar API enabled, put GCAL_CLIENT_ID and GCAL_CLIENT_SECRET in .env, run `npm run gcal-auth`, then verify a real event appears and disappears through `npm run agent`. Until then the calendar leg uses the mock and says so at boot.
+- On demo day: run the docs/demo.md rehearsal checklist twice back to back on the demo machine before going on.
 
 ## Standing rules (do not violate)
 - No em dashes anywhere: code, comments, docs, chat. Plain student tone.
@@ -54,3 +57,4 @@ The model's closing chat summary is elided here (it styles with em dashes); it c
 ## Gotchas
 - Viraj's home directory (~) is itself accidentally a git repo. This project lives in ~/Projects/saga, its own repo, unaffected.
 - Viraj's Node is x64 and runs under Rosetta on this arm64 Mac, so npm installs the Agent SDK's darwin-x64 bundled claude binary, and that binary spins at 100% CPU forever (even on --help). src/agent/run.ts therefore resolves the locally installed native arm64 claude from PATH and passes it as pathToClaudeCodeExecutable; override with CLAUDE_CODE_PATH if needed. Do not remove that or the agent hangs.
+- The act 1 SIGKILL orphans the SDK's claude subprocess. Harmless, but `pkill -f "local/bin/claude --output-format"` between rehearsals keeps things tidy (docs/demo.md fallback section).

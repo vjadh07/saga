@@ -23,6 +23,19 @@ The engine writes the intent down before the network call goes out, asks the ven
 
 The nasty case is covered: the mock vendors can be armed to book internally and then answer 500. The agent's call "fails", reconciliation catches the vendor's lie, and the booking commits exactly once instead of twice.
 
+## The audit side
+
+The ledger is only half the story; the other half is reading it. `src/audit/` holds deterministic reconciliation checks that diff the ledger against the vendors' own records, and a second Agent SDK agent, the auditor, whose only tools are those checks plus timeline lookups. Every finding is a named invariant violation with evidence: a booking the vendor holds that no ledger intent authorized, a duplicate charge for an authorized stay, a compensation the ledger recorded that never took effect, a saga wedged in flight. The model investigates and narrates; pure tested functions do the detecting.
+
+```
+npm run seed        # a month of synthetic history, 5 planted reconciliation breaks
+npm run audit -- "investigate the hotels vendor"
+```
+
+## The landing page
+
+`npm run site` serves the pitch page on http://127.0.0.1:4400, one self-contained HTML file, no build step, no external requests.
+
 ## Quickstart
 
 Node >= 22.5 (the ledger uses node:sqlite). For the agent, a logged-in local Claude Code install.

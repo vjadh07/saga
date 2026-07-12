@@ -43,7 +43,13 @@ The model's closing chat summary is elided here (it styles with em dashes); it c
 - Do not enable the plugin's review gate, it can loop and drain usage limits.
 
 ## Next
-- Everything in docs/plan.md is done and verified, including the real calendar leg. Remaining is demo-day prep only: run the docs/demo.md rehearsal checklist twice back to back on the demo machine before going on.
+- Everything in docs/plan.md AND docs/superpowers/plans/2026-07-11-saga-audit.md is done. Remaining is demo-day prep: run the docs/demo.md rehearsal checklist twice back to back on the demo machine, and pitch practice.
+
+## Audit layer (built 2026-07-12, council-directed)
+- Direction chosen by a second 3-0 council vote after Viraj pushed for more depth: keep Saga, add the audit side, no rebrand (everything is Saga, no separate product name).
+- New: ABORTED terminal state (fixes the wedged-saga bug the council found), src/audit/checks.ts (pure, deterministic reconciliation: SHADOW_EFFECT, DUPLICATE_CHARGE, PHANTOM_COMPENSATION, WEDGED_SAGA), npm run seed (deterministic month of history through the real engine, 5 planted breaks on the hotels vendor), npm run audit (conversational read-only auditor agent), npm run site (landing page), runbook v2 with the audit as act 3.
+- Language rule everywhere: reconciliation breaks, never the f-word (fraud). The VC judge's reasoning: invariant violations with evidence are defensible; anomaly scoring on synthetic data is not.
+- First live auditor run found all 5 planted breaks and wrote the report now committed as reports/audit-fallback.md (em dashes normalized). The model independently noticed created-at timestamps contradicting the ledger timeline and used them as evidence, unprompted.
 
 ## Google Calendar: LIVE and verified (2026-07-11)
 - OAuth done: Google Cloud project saga-demo (owned by virajj852@gmail.com, not the ASU account), Calendar API enabled, consent screen External/Testing with virajj852@gmail.com as test user, desktop client saga-cli. Creds in .env, token in .secrets/gcal-token.json, both gitignored.

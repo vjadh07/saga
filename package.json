@@ -8,6 +8,7 @@
     "test": "vitest run",
     "vendors": "tsx scripts/vendors.ts",
     "viewer": "tsx scripts/viewer.ts",
+    "site": "tsx scripts/site.ts",
     "agent": "tsx scripts/agent.ts",
     "audit": "tsx scripts/audit.ts",
     "reset": "tsx scripts/reset.ts",

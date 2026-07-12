@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saga, the transaction layer for AI agents</title>
+<meta name="description" content="Saga makes every action an AI agent takes crash-safe, verified against the vendor, and undoable, on an append-only ledger.">
+<style>
+  :root {
+    --bg: #0d1117; --panel: #10161f; --panel2: #161b22; --line: #262d37;
+    --text: #e6edf3; --dim: #8b949e; --faint: #58606a;
+    --accent: #3fb950; --amber: #d29922; --red: #f85149; --violet: #bc8cff;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--text); font: 16px/1.6 var(--sans); }
+  a { color: inherit; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  code, pre, .mono { font-family: var(--mono); }
+
+  /* nav */
+  nav { border-bottom: 1px solid var(--line); position: sticky; top: 0;
+        background: rgba(13,17,23,.92); backdrop-filter: blur(8px); z-index: 10; }
+  nav .wrap { display: flex; align-items: center; height: 64px; gap: 28px; }
+  .brand { font-family: var(--mono); font-weight: 700; letter-spacing: 2px; font-size: 15px;
+           text-decoration: none; }
+  .brand b { color: var(--accent); }
+  nav .links { margin-left: auto; display: flex; gap: 22px; }
+  nav .links a { color: var(--dim); text-decoration: none; font-size: 14px; }
+  nav .links a:hover { color: var(--text); }
+
+  /* hero */
+  .hero { padding: 72px 0 64px; }
+  .hero .wrap { display: grid; grid-template-columns: 6fr 5fr; gap: 48px; align-items: center; }
+  h1 { font-size: clamp(34px, 5vw, 54px); line-height: 1.05; letter-spacing: -0.02em; }
+  .hero p { color: var(--dim); margin: 20px 0 28px; max-width: 44ch; font-size: 18px; }
+  .cta-row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: 11px 20px; border-radius: 8px; text-decoration: none;
+         font-size: 15px; font-weight: 600; transition: transform .15s ease, background .15s ease; }
+  .btn:active { transform: translateY(1px) scale(.99); }
+  .btn-primary { background: var(--accent); color: #04110a; }
+  .btn-primary:hover { background: #4cc75e; }
+  .btn-ghost { border: 1px solid var(--line); color: var(--text); }
+  .btn-ghost:hover { border-color: var(--dim); }
+
+  /* real ledger preview (same vocabulary as the live viewer) */
+  .ledger { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+            padding: 14px 16px; font-size: 13px; }
+  .ledger .head { display: flex; justify-content: space-between; color: var(--faint);
+                  font-family: var(--mono); font-size: 11px; margin-bottom: 10px; }
+  .action { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 10px;
+            background: var(--panel2); }
+  .action .row1 { display: flex; align-items: center; gap: 10px; }
+  .action .type { font-weight: 700; font-size: 13px; }
+  .action .id { color: var(--faint); font-family: var(--mono); font-size: 11px; }
+  .badge { margin-left: auto; padding: 1px 10px; border-radius: 999px; font-size: 11px;
+           font-weight: 700; color: #04110a; font-family: var(--mono); }
+  .b-green { background: var(--accent); }
+  .b-amber { background: var(--amber); }
+  .steps { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; align-items: center;
+           font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
+  .steps .ev { border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; }
+  .steps .arr { color: var(--faint); }
+  @media (prefers-reduced-motion: no-preference) {
+    .pulse { animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: .55; } }
+  }
+  .caption { color: var(--faint); font-size: 12px; margin-top: 12px; }
+
+  section { padding: 72px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: clamp(24px, 3.2vw, 34px); letter-spacing: -0.01em; margin-bottom: 14px; }
+  .lede { color: var(--dim); max-width: 62ch; margin-bottom: 36px; }
+
+  /* problem */
+  .problems { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 14px; }
+  .problem { border: 1px solid var(--line); border-radius: 10px; padding: 22px; background: var(--panel); }
+  .problem h3 { font-size: 17px; margin-bottom: 8px; }
+  .problem p { color: var(--dim); font-size: 14.5px; }
+
+  /* pipeline */
+  .pipeline { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 14px; align-items: stretch; }
+  .stage { border: 1px solid var(--line); border-radius: 10px; padding: 22px; background: var(--panel); }
+  .stage .k { font-family: var(--mono); color: var(--accent); font-weight: 700; font-size: 14px;
+              letter-spacing: 1px; }
+  .stage p { color: var(--dim); font-size: 14.5px; margin-top: 8px; }
+  .pipe-arrow { align-self: center; color: var(--faint); font-size: 22px; }
+  .machine { margin: 28px 0 0; padding: 14px 18px; background: var(--panel); border: 1px solid var(--line);
+             border-radius: 8px; font-family: var(--mono); font-size: 13px; color: var(--dim);
+             overflow-x: auto; white-space: nowrap; }
+  .machine b { color: var(--text); }
+
+  /* proof stories */
+  .proofs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 36px; }
+  .proof { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 22px; }
+  .proof h3 { font-size: 18px; margin-bottom: 6px; }
+  .proof > p { color: var(--dim); font-size: 14.5px; margin-bottom: 14px; }
+  .term { background: #0a0e14; border: 1px solid var(--line); border-radius: 8px; padding: 14px;
+          font-family: var(--mono); font-size: 12px; line-height: 1.7; color: var(--dim);
+          overflow-x: auto; }
+  .term .g { color: var(--accent); }
+  .term .a { color: var(--amber); }
+  .term .r { color: var(--red); }
+  .term .t { color: var(--text); }
+
+  /* quickstart */
+  pre.block { background: #0a0e14; border: 1px solid var(--line); border-radius: 10px;
+              padding: 18px 20px; font-size: 13px; line-height: 1.8; color: var(--text);
+              overflow-x: auto; }
+  pre.block .c { color: var(--faint); }
+  pre.block .g { color: var(--accent); }
+  .use-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+  .use-grid h3 { font-size: 16px; margin-bottom: 10px; }
+
+  /* architecture */
+  .arch { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 12px; align-items: center;
+          margin-top: 8px; }
+  .node { border: 1px solid var(--line); border-radius: 10px; padding: 16px; background: var(--panel);
+          text-align: center; }
+  .node .t1 { font-weight: 700; font-size: 14.5px; }
+  .node .t2 { color: var(--faint); font-size: 12px; font-family: var(--mono); margin-top: 4px; }
+  .arch .arr { color: var(--faint); text-align: center; font-size: 20px; }
+  .arch-col { display: grid; gap: 12px; }
+
+  footer { border-top: 1px solid var(--line); padding: 36px 0 48px; color: var(--faint); font-size: 14px; }
+  footer .wrap { display: flex; gap: 20px; align-items: baseline; flex-wrap: wrap; }
+  footer a { color: var(--dim); }
+
+  @media (max-width: 820px) {
+    .hero .wrap, .problems, .proofs, .use-grid { grid-template-columns: 1fr; }
+    .pipeline { grid-template-columns: 1fr; }
+    .pipe-arrow { transform: rotate(90deg); justify-self: center; }
+    .arch { grid-template-columns: 1fr; }
+    .arch .arr { transform: rotate(90deg); }
+    nav .links a.hide-sm { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#">SAGA<b>.</b></a>
+    <div class="links">
+      <a href="#how" class="hide-sm">How it works</a>
+      <a href="#use" class="hide-sm">Use it</a>
+      <a href="#audit" class="hide-sm">Audit</a>
+      <a href="https://github.com/vjadh07/saga">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div>
+      <h1>The transaction layer for AI agents.</h1>
+      <p>Saga makes every action an agent takes crash-safe, verified against the vendor, and undoable, on an append-only ledger.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#how">See it survive kill -9</a>
+        <a class="btn btn-ghost" href="https://github.com/vjadh07/saga">View on GitHub</a>
+      </div>
+    </div>
+    <div class="ledger" aria-label="Live ledger state after a crash">
+      <div class="head"><span>saga ledger</span><span>live</span></div>
+      <div class="action">
+        <div class="row1">
+          <span class="type">flight.book</span>
+          <span class="id">frhes9k386on0ep1obvtb9du1o</span>
+          <span class="badge b-green">COMMITTED</span>
+        </div>
+        <div class="steps">
+          <span class="ev">STAGED</span><span class="arr">&#8594;</span>
+          <span class="ev">CALLED</span><span class="arr">&#8594;</span>
+          <span class="ev">RECONCILED</span><span class="arr">&#8594;</span>
+          <span class="ev">COMMITTED</span>
+        </div>
+      </div>
+      <div class="action">
+        <div class="row1">
+          <span class="type">hotel.book</span>
+          <span class="id">3h53iqvou9vmcnrv3c6up5ku7f</span>
+          <span class="badge b-amber pulse">CALLED</span>
+        </div>
+        <div class="steps">
+          <span class="ev">STAGED</span><span class="arr">&#8594;</span>
+          <span class="ev">CALLED</span><span class="arr">&#8594;</span>
+          <span class="ev" style="border-style:dashed">?</span>
+        </div>
+      </div>
+      <div class="caption">The moment after the agent was killed mid-booking. Captured from a rehearsal run.</div>
+    </div>
+  </div>
+</header>
+
+<section id="problem">
+  <div class="wrap">
+    <h2>Agents got hands. Nobody gave them a spine.</h2>
+    <p class="lede">Hundreds of agent products can now book, pay, send, and cancel. Three failures follow them everywhere.</p>
+    <div class="problems">
+      <div class="problem">
+        <h3>They die mid-action</h3>
+        <p>A crash between the charge and the confirmation leaves a half-finished job, and the restarted agent has no memory of what it already did. Retry double-books. Caution loses the booking.</p>
+      </div>
+      <div class="problem">
+        <h3>Vendors lie</h3>
+        <p>The API does the work, then answers 500. The agent believes the error and pays twice.</p>
+      </div>
+      <div class="problem">
+        <h3>Nothing is provable</h3>
+        <p>When finance asks what the agent did last month, a chat log is not an answer.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="lede">Databases solved this fifty years ago with write-ahead logs. Saga applies the same discipline to a new unreliable node: an LLM with a credit card.</p>
+    <div class="pipeline">
+      <div class="stage">
+        <span class="k">STAGE</span>
+        <p>Intent hits the ledger before any network call leaves the machine. If the process dies now, the plan survives it.</p>
+      </div>
+      <div class="pipe-arrow">&#8594;</div>
+      <div class="stage">
+        <span class="k">VERIFY</span>
+        <p>The vendor's response is never trusted. Saga asks the vendor's own records whether the effect exists.</p>
+      </div>
+      <div class="pipe-arrow">&#8594;</div>
+      <div class="stage">
+        <span class="k">COMMIT</span>
+        <p>Only confirmed effects commit. Everything else retries once, aborts durably, or compensates in reverse order.</p>
+      </div>
+    </div>
+    <div class="machine">
+      <b>STAGED</b> &#8594; <b>CALLED</b> &#8594; <b>RECONCILED</b> &#8594; <b>COMMITTED</b>
+      &nbsp;&nbsp;| cancel: <b>COMPENSATION_CALLED</b> &#8594; <b>COMPENSATED</b>
+      &nbsp;&nbsp;| dead end: <b>ABORTED</b>
+    </div>
+
+    <div class="proofs">
+      <div class="proof">
+        <h3>Kill it. It finishes anyway.</h3>
+        <p>A real SIGKILL lands mid-booking. On restart, the engine reconciles against the vendor and completes exactly once, before the model says a word.</p>
+        <div class="term">$ CRASH_AFTER="hotel.book:CALLED" npm run agent -- "book my trip"<br>
+  -&gt; book_flight {"flightId":"F100"} <span class="g">COMMITTED</span><br>
+  -&gt; book_hotel {"hotelId":"H100"} <span class="r">killed: exit 137</span><br>
+<br>
+$ npm run agent -- "finish booking my trip"<br>
+<span class="a">[recovery] reconciled 1 in-flight action left by a previous life</span><br>
+<span class="t">trip: committed. flight, hotel, calendar: exactly one of each.</span></div>
+      </div>
+      <div class="proof" id="audit">
+        <h3>The ledger audits itself.</h3>
+        <p>A second agent on the same substrate reads the ledger against vendor records and surfaces every reconciliation break, with evidence.</p>
+        <div class="term">$ npm run audit -- "investigate the hotels vendor"<br>
+  -&gt; run_reconciliation {"vendor":"hotels"}<br>
+<span class="t">5 reconciliation breaks.</span> Vendor holds <span class="r">2 bookings the ledger never authorized</span>,<br>
+<span class="r">1 duplicate charge</span> for an authorized stay, and still holds a booking<br>
+the ledger says was <span class="a">compensated six days earlier</span>. Report saved.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="use">
+  <div class="wrap">
+    <h2>Use it</h2>
+    <p class="lede">Clone it, kill it, audit it. Node 22.5 or newer and a logged-in Claude Code install are the only requirements.</p>
+    <div class="use-grid">
+      <div>
+        <h3>Run the whole thing</h3>
+        <pre class="block">git clone https://github.com/vjadh07/saga
+cd saga &amp;&amp; npm install
+npm test          <span class="c"># 60+ tests, incl. a real kill -9 round trip</span>
+npm run vendors   <span class="c"># mock vendors on :4100</span>
+npm run viewer    <span class="c"># live ledger on :4200</span>
+
+npm run agent -- "book me a flight to SFO next friday"
+CRASH_AFTER="hotel.book:CALLED" npm run agent -- "book my trip"
+npm run agent -- "finish booking my trip"
+
+npm run seed      <span class="c"># a month of history, 5 planted breaks</span>
+npm run audit -- "investigate the hotels vendor"</pre>
+      </div>
+      <div>
+        <h3>Put your own tool on the ledger</h3>
+        <pre class="block"><span class="c">// any side effect becomes a saga action:</span>
+<span class="c">// implement call / reconcile / compensate for your vendor</span>
+const staged = saga.stage({
+  sagaId: "job-42",
+  type: "invoice.send",
+  vendor: "billing",
+  params: { invoiceId: "inv_881" },
+});
+
+await saga.execute(staged.actionId);
+<span class="c">// STAGED -&gt; CALLED -&gt; RECONCILED -&gt; COMMITTED,</span>
+<span class="c">// or it does not commit at all</span>
+
+await saga.cancel("job-42");   <span class="c">// verified undo, newest first</span>
+saga.receipt("job-42");        <span class="c">// the whole story, forever</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="arch">
+  <div class="wrap">
+    <h2>Two agents, one source of truth</h2>
+    <p class="lede">The booking agent can only act through the engine. The auditor can only read. The ledger sits between them and outlives both.</p>
+    <div class="arch">
+      <div class="arch-col">
+        <div class="node"><div class="t1">Booking agent</div><div class="t2">acts, via saga tools only</div></div>
+        <div class="node"><div class="t1">Auditor agent</div><div class="t2">reads, reconciles, reports</div></div>
+      </div>
+      <div class="arr">&#8594;</div>
+      <div class="arch-col">
+        <div class="node"><div class="t1">Saga engine</div><div class="t2">stage, verify, commit, recover, compensate</div></div>
+        <div class="node"><div class="t1">Append-only ledger</div><div class="t2">SQLite, every event durable first</div></div>
+      </div>
+      <div class="arr">&#8594;</div>
+      <div class="arch-col">
+        <div class="node"><div class="t1">Vendors</div><div class="t2">flights, hotels (mock, deterministic)</div></div>
+        <div class="node"><div class="t1">Google Calendar</div><div class="t2">real integration, real events</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span class="mono">SAGA<b style="color:var(--accent)">.</b></span>
+    <span>Built at a hackathon, 2026.</span>
+    <a href="https://github.com/vjadh07/saga">github.com/vjadh07/saga</a>
+  </div>
+</footer>
+
+</body>
+</html>

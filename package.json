@@ -9,6 +9,7 @@
     "vendors": "tsx scripts/vendors.ts",
     "viewer": "tsx scripts/viewer.ts",
     "agent": "tsx scripts/agent.ts",
+    "audit": "tsx scripts/audit.ts",
     "reset": "tsx scripts/reset.ts",
     "seed": "tsx scripts/seed.ts",
     "gcal-auth": "tsx scripts/gcal-auth.ts"

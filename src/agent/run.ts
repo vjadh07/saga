@@ -90,7 +90,7 @@ export function buildSagaServer(ctx: TripContext) {
 // The SDK ships an x64 claude binary; under an x64 Node on Apple silicon it
 // runs via Rosetta and never finishes booting. The locally installed native
 // CLI is also the login this agent rides, so prefer it whenever present.
-function localClaudePath(): string | undefined {
+export function localClaudePath(): string | undefined {
   if (process.env.CLAUDE_CODE_PATH) return process.env.CLAUDE_CODE_PATH;
   try {
     const found = execFileSync("which", ["claude"], { encoding: "utf8" }).trim();

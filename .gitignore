@@ -24,3 +24,7 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
+
+# audit reports are generated, except the committed demo fallback
+reports/*
+!reports/audit-fallback.md

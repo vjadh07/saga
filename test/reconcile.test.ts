@@ -87,7 +87,7 @@ test("call throws and did not land: retries once then commits", async () => {
   ]);
 });
 
-test("never lands within two attempts: fails without COMMITTED", async () => {
+test("never lands within two attempts: aborts without COMMITTED", async () => {
   const vendor = new ScriptedVendor(["throw", "throw"]);
   const { ledger, saga, staged } = setup(vendor);
 
@@ -95,7 +95,7 @@ test("never lands within two attempts: fails without COMMITTED", async () => {
   expect(vendor.calls).toBe(2);
   const events = ledger.events("t").map((e) => e.event);
   expect(events).not.toContain("COMMITTED");
-  expect(events[events.length - 1]).toBe("RECONCILED");
+  expect(events[events.length - 1]).toBe("ABORTED");
 });
 
 test("reconcile unreachable: action parks at CALLED for later recovery", async () => {

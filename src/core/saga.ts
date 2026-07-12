@@ -215,6 +215,14 @@ export class Saga {
       }
     }
 
+    // deterministic verdict after all attempts: the action is dead, say so
+    // durably instead of wedging the saga in a non-terminal state forever
+    this.record({
+      sagaId: action.sagaId,
+      actionId,
+      event: "ABORTED",
+      payload: { attempts: Saga.MAX_ATTEMPTS },
+    });
     throw new SagaExecutionError(
       `action ${actionId} did not land after ${Saga.MAX_ATTEMPTS} attempts`,
       actionId,

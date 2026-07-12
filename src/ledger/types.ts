@@ -4,7 +4,8 @@ export type EventType =
   | "RECONCILED"
   | "COMMITTED"
   | "COMPENSATION_CALLED"
-  | "COMPENSATED";
+  | "COMPENSATED"
+  | "ABORTED";
 
 export interface LedgerEvent {
   seq: number;
@@ -26,4 +27,5 @@ export interface ActionState {
 export const TERMINAL_STATES: ReadonlySet<EventType> = new Set([
   "COMMITTED",
   "COMPENSATED",
+  "ABORTED",
 ]);

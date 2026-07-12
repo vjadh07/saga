@@ -8,6 +8,7 @@
     --bg: #0d1117; --panel: #161b22; --line: #30363d; --text: #e6edf3; --dim: #8b949e;
     --staged: #8b949e; --called: #d29922; --reconciled: #58a6ff;
     --committed: #3fb950; --compensation_called: #f0883e; --compensated: #bc8cff;
+    --aborted: #f85149;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
@@ -45,7 +46,7 @@
 const COLORS = {
   STAGED: "var(--staged)", CALLED: "var(--called)", RECONCILED: "var(--reconciled)",
   COMMITTED: "var(--committed)", COMPENSATION_CALLED: "var(--compensation_called)",
-  COMPENSATED: "var(--compensated)",
+  COMPENSATED: "var(--compensated)", ABORTED: "var(--aborted)",
 };
 
 function clock(iso) { return iso.slice(11, 23); }

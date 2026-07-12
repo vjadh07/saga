@@ -43,8 +43,13 @@ The model's closing chat summary is elided here (it styles with em dashes); it c
 - Do not enable the plugin's review gate, it can loop and drain usage limits.
 
 ## Next
-- Google Calendar OAuth, the ONLY open build item, needs Viraj at a browser once: create a Google Cloud OAuth desktop client with the Calendar API enabled, put GCAL_CLIENT_ID and GCAL_CLIENT_SECRET in .env, run `npm run gcal-auth`, then verify a real event appears and disappears through `npm run agent`. Until then the calendar leg uses the mock and says so at boot.
-- On demo day: run the docs/demo.md rehearsal checklist twice back to back on the demo machine before going on.
+- Everything in docs/plan.md is done and verified, including the real calendar leg. Remaining is demo-day prep only: run the docs/demo.md rehearsal checklist twice back to back on the demo machine before going on.
+
+## Google Calendar: LIVE and verified (2026-07-11)
+- OAuth done: Google Cloud project saga-demo (owned by virajj852@gmail.com, not the ASU account), Calendar API enabled, consent screen External/Testing with virajj852@gmail.com as test user, desktop client saga-cli. Creds in .env, token in .secrets/gcal-token.json, both gitignored.
+- Gotcha hit on the way: the consent screen was first set to Internal, which 403s (org_internal) for a plain Gmail account because it is not a member of the Cloud org. External + test user is the right shape.
+- Live verification observed: `npm run agent -- "book me a one way flight ... add it to my calendar"` printed `[calendar] real Google Calendar`, committed flight.book and calendar.add, and an independent events.get showed the event confirmed on the real calendar. `npm run agent -- "cancel my whole trip"` compensated both in reverse order and events.get then showed status cancelled (Google tombstones deletes as cancelled; the adapter treats 404 and cancelled as gone, so reconcile verified the undo).
+- Viraj's Google Calendar display timezone is Asia/Kolkata, so event times render shifted in the API output; the stored events carry the Mac's timezone (America/Los_Angeles) and are correct.
 
 ## Standing rules (do not violate)
 - No em dashes anywhere: code, comments, docs, chat. Plain student tone.

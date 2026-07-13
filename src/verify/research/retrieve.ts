@@ -72,7 +72,7 @@ export async function retrieveSources(input: RetrieveInput): Promise<RetrieveOut
       sourceType: "unknown", // assessed later by source-quality analysis
       content: clean.clean,
       quotes: extractQuotes(clean.clean),
-      outboundCitations: [],
+      outboundCitations: [...new Set(fetched.links.map(canonicalizeUrl))],
     };
     sources.push({ source, fetched, safety: clean.events, snippet: result.snippet });
   }

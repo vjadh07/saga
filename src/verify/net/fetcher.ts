@@ -35,10 +35,18 @@ function decodeEntities(s: string): string {
     .replace(/&#39;/gi, "'");
 }
 
-// Extract a title and readable text, preserving paragraph and heading breaks.
-export function extractReadableText(html: string): { title: string; text: string } {
+// Extract a title, readable text, and outbound http(s) links, preserving paragraph and
+// heading breaks. The links feed source-lineage detection.
+export function extractReadableText(html: string): { title: string; text: string; links: string[] } {
   const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
   const title = titleMatch ? decodeEntities(titleMatch[1]!).replace(/\s+/g, " ").trim() : "";
+  const links = [
+    ...new Set(
+      [...html.matchAll(/<a\b[^>]*href\s*=\s*["']([^"']+)["']/gi)]
+        .map((m) => m[1]!)
+        .filter((h) => /^https?:\/\//i.test(h)),
+    ),
+  ];
   let t = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -51,7 +59,7 @@ export function extractReadableText(html: string): { title: string; text: string
     .replace(/ *\n */g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  return { title, text: t };
+  return { title, text: t, links };
 }
 
 // Default transport: real network fetch with DNS SSRF re-check, timeout, and size cap.
@@ -147,7 +155,7 @@ export class LivePageFetcher implements PageFetcher {
     }
     if (res.body.length > this.maxBytes) throw new Error("response too large");
 
-    const { title, text } = extractReadableText(res.body);
+    const { title, text, links } = extractReadableText(res.body);
     return {
       originalUrl,
       finalUrl: current.href,
@@ -155,6 +163,7 @@ export class LivePageFetcher implements PageFetcher {
       contentType,
       title,
       text,
+      links,
       fetchedAt: this.now(),
       contentHash: sha256hex(text),
     };

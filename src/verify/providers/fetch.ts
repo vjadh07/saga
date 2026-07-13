@@ -11,6 +11,7 @@ export interface FetchedPage {
   contentType: string;
   title: string;
   text: string; // extracted readable text
+  links: string[]; // outbound http(s) links, for lineage
   fetchedAt: string; // ISO
   contentHash: string; // sha256 of text
 }
@@ -26,6 +27,7 @@ export interface FixturePage {
   contentType?: string;
   finalUrl?: string;
   status?: number;
+  links?: string[];
 }
 
 // Deterministic fetcher for tests and Demo mode: a url map to canned page content.
@@ -49,6 +51,7 @@ export class FixturePageFetcher implements PageFetcher {
       contentType: p.contentType ?? "text/html",
       title: p.title,
       text: p.text,
+      links: p.links ?? [],
       fetchedAt: this.now(),
       contentHash: sha256hex(p.text),
     };

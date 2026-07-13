@@ -259,6 +259,31 @@ export interface TemporalAssessment {
   note: string;
 }
 
+// ---------- contradiction resolution ----------
+
+export const CONFLICT_CAUSES = [
+  "different_period",
+  "different_definition",
+  "different_population",
+  "different_region",
+  "preliminary_vs_final",
+  "global_vs_segment",
+  "correction",
+  "superseding",
+  "different_methodology",
+  "genuine_dispute",
+  "none",
+] as const;
+export type ConflictCause = (typeof CONFLICT_CAUSES)[number];
+
+export interface ConflictAnalysis {
+  claimId: string;
+  hasConflict: boolean;
+  cause: ConflictCause;
+  reconciled: boolean; // true when the apparent conflict is explained away, not a real disagreement
+  explanation: string;
+}
+
 // ---------- verdicts ----------
 
 export const VERDICTS = [

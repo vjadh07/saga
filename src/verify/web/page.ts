@@ -176,7 +176,30 @@ export function renderStudioPage(result: AuditResult): string {
   .draftout ins{text-decoration:none;color:var(--ok);background:rgba(74,222,128,.08);border-radius:3px;padding:0 2px}
   .draftout del{color:var(--bad)}
   .note{color:var(--faint);font-size:12px;margin-top:10px}
-  @media(max-width:1000px){.stats{grid-template-columns:repeat(5,1fr)}.work{grid-template-columns:1fr}.draftgrid{grid-template-columns:1fr}}
+  /* input screen */
+  #intext{width:100%;min-height:150px;resize:vertical;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:14px;font:14px/1.6 var(--sans)}
+  #intext::placeholder{color:var(--faint)}
+  #intext:focus{outline:none;border-color:rgba(74,222,128,.45)}
+  .inputctl{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:12px}
+  .modes{display:flex;gap:6px}
+  .modes label{font-size:13px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .modes input{accent-color:var(--accent)}
+  .btn-run{margin-left:auto;background:var(--accent);color:var(--ink);border:none;border-radius:10px;padding:10px 24px;font:600 14px var(--sans);cursor:pointer;transition:background .15s}
+  .btn-run:hover{background:#6ce599}
+  .btn-run:disabled{opacity:.5;cursor:default}
+  #mapout{margin-top:18px}
+  .cmap-status{color:var(--faint);font-size:13px;padding:8px 0}
+  .cmap-safe{border:1px solid rgba(248,113,113,.4);background:rgba(248,113,113,.06);border-radius:10px;padding:12px;margin-bottom:12px;color:#f3c8c8;font-size:13px}
+  .cmap-claim{border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px;background:var(--panel)}
+  .cmap-claim .ct{font-size:14px;line-height:1.5}
+  .cmap-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  .cmap-badges span{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;border:1px solid var(--line);border-radius:999px;padding:2px 9px;color:var(--dim)}
+  .cmap-badges .risk-high{color:var(--bad);border-color:rgba(248,113,113,.4)}
+  .cmap-badges .subj{color:var(--subj);border-color:rgba(90,162,240,.4)}
+  .cmap-contract{margin-top:10px;border-top:1px solid var(--line2);padding-top:10px;font-size:12.5px;color:var(--dim)}
+  .cmap-contract b{color:var(--text);font-weight:600}
+  .example-tag{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);border:1px solid var(--line);border-radius:999px;padding:4px 12px}
+  @media(max-width:1000px){.stats{grid-template-columns:repeat(5,1fr)}.work{grid-template-columns:1fr}.draftgrid{grid-template-columns:1fr}.btn-run{margin-left:0}}
 </style>
 
 <header><div class="wrap">
@@ -186,7 +209,23 @@ export function renderStudioPage(result: AuditResult): string {
 </div></header>
 
 <main class="wrap">
+  <section id="input">
+    <h2>Verify your own text</h2>
+    <textarea id="intext" placeholder="Paste an AI-written report, article, or draft, then Verify."></textarea>
+    <div class="inputctl">
+      <div class="modes">
+        <label><input type="radio" name="mode" value="quick"> Quick</label>
+        <label><input type="radio" name="mode" value="deep" checked> Deep</label>
+        <label><input type="radio" name="mode" value="high_stakes"> High-Stakes</label>
+      </div>
+      <button id="run" class="btn-run">Verify</button>
+    </div>
+    <div id="mapout"></div>
+    <div class="note">The live Claim Mapper extracts and classifies claims and scans your text for injection. Evidence retrieval is not yet wired to the live web, so this is the pre-retrieval claim map. The full worked audit of a demo report is below.</div>
+  </section>
+
   <section>
+    <div style="margin-bottom:16px"><span class="example-tag">Worked example: a demo report</span></div>
     <h2>Trust Passport</h2>
     <div class="stats">${passportStats}</div>
     <div class="note">Last verified ${esc(p.lastVerifiedAt)}. ${result.lineage.sourceCount} sources cited, ${result.lineage.independentOrigins} independent evidence origins.</div>
@@ -297,5 +336,39 @@ function renderDraft(){
 }
 document.querySelectorAll(".approve").forEach(cb=>cb.addEventListener("change",renderDraft));
 renderDraft();
+
+// input screen: paste text, run the live Claim Mapper, render the claim map
+var runBtn=document.getElementById("run");
+var mapout=document.getElementById("mapout");
+function badge(t,cls){return '<span class="'+(cls||"")+'">'+escapeHtml(t)+'</span>'}
+function renderMap(m){
+  var h="";
+  if(m.safety && m.safety.length){
+    h+='<div class="cmap-safe">Instruction-like text found in your input ('+m.safety.length+'): "'+escapeHtml(m.safety[0].excerpt)+'". Treated as data, never instructions.</div>';
+  }
+  if(!m.claims || !m.claims.length){ mapout.innerHTML=h+'<div class="cmap-status">No verifiable claims found.</div>'; return; }
+  h+='<div class="cmap-status">'+m.claims.length+' claim(s) extracted ('+m.mode.replace("_"," ")+' mode).</div>';
+  for(var i=0;i<m.claims.length;i++){
+    var c=m.claims[i];
+    var ct=(m.contracts||[]).filter(function(x){return x.claimId===c.id})[0];
+    h+='<div class="cmap-claim"><div class="ct">"'+escapeHtml(c.originalText)+'"</div>';
+    h+='<div class="cmap-badges">'+badge(c.claimType)+badge(c.risk+" risk", c.risk==="high"?"risk-high":"")+badge(c.verifiable?"verifiable":"not verifiable", c.verifiable?"":"subj")+(c.timeSensitive?badge("time-sensitive"):"")+'</div>';
+    if(ct){ h+='<div class="cmap-contract"><b>Would support:</b> '+escapeHtml(ct.supportingCriteria[0])+'<br><b>Would contradict:</b> '+escapeHtml(ct.contradictingCriteria[0])+(ct.primaryRequired?'<br><b>Primary source required.</b>':"")+'</div>'; }
+    h+='</div>';
+  }
+  mapout.innerHTML=h;
+}
+if(runBtn){
+  runBtn.addEventListener("click",function(){
+    var text=document.getElementById("intext").value.trim();
+    if(!text){ mapout.innerHTML='<div class="cmap-status">Paste some text first.</div>'; return; }
+    var mode=(document.querySelector('input[name=mode]:checked')||{}).value||"deep";
+    runBtn.disabled=true; mapout.innerHTML='<div class="cmap-status">Claim Mapper extracting claims, this can take a few seconds...</div>';
+    fetch("/api/map",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({text:text,mode:mode})})
+      .then(function(r){return r.json()})
+      .then(function(m){ runBtn.disabled=false; if(m.error){ mapout.innerHTML='<div class="cmap-safe">'+escapeHtml(m.error)+'</div>'; } else { renderMap(m); } })
+      .catch(function(e){ runBtn.disabled=false; mapout.innerHTML='<div class="cmap-safe">Request failed: '+escapeHtml(String(e))+'</div>'; });
+  });
+}
 </script>`;
 }

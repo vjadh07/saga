@@ -58,6 +58,7 @@ export const MAPPER_PROMPT = `You are the Claim Mapper for Saga, an evidence-aud
 Rules:
 - One factual assertion per claim. Never combine two assertions.
 - originalText MUST be an exact verbatim substring of the document (copy it, do not paraphrase).
+- claimType is the single most specific of: numeric (a figure or statistic), event (something happened), causal (X causes Y), definitional (what a term means), quote (an exact quotation), prediction (about the future), existence (a thing exists or has a property), comparison (a ranking or superlative like "largest"), or general when none fits.
 - Mark verifiable=false for opinions, value judgments, and predictions that cannot be checked against evidence today.
 - timeSensitive=true if the claim could change over time (rankings, "current", "largest", counts for a given year). Set asOf to the date the claim refers to if it states one, else null.
 - risk reflects how much harm a wrong answer does if published: high for medical, legal, financial, or safety claims.

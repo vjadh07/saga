@@ -133,6 +133,24 @@ export interface Evidence {
   citationAssessment?: CitationAssessment;
 }
 
+// ---------- claim dependencies ----------
+
+export const DEPENDENCY_KINDS = [
+  "depends_on",
+  "derived_from",
+  "assumes",
+  "calculated_from",
+  "qualifies",
+  "contradicts",
+] as const;
+export type DependencyKind = (typeof DEPENDENCY_KINDS)[number];
+
+export interface ClaimDependency {
+  from: string; // the dependent claim
+  to: string; // the claim it relies on or relates to
+  kind: DependencyKind;
+}
+
 // ---------- numeric verification ----------
 
 export const NUMERIC_KINDS = [

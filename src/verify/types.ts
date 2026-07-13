@@ -294,6 +294,7 @@ export const VERDICTS = [
   "outdated",
   "insufficient_evidence",
   "not_verifiable",
+  "failed",
 ] as const;
 export type VerdictKind = (typeof VERDICTS)[number];
 

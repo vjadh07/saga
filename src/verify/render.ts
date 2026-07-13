@@ -61,6 +61,7 @@ const VERDICT_LABEL: Record<Verdict["verdict"], string> = {
   outdated: "Outdated",
   insufficient_evidence: "Insufficient evidence",
   not_verifiable: "Not objectively verifiable",
+  failed: "Audit failed",
 };
 
 const STATUS_LABEL: Record<string, string> = {

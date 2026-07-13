@@ -54,8 +54,11 @@ export function buildPassport(input: PassportInput): TrustPassport {
   const outdated = count("outdated");
   const insufficient = count("insufficient_evidence");
   const notVerifiable = count("not_verifiable");
+  const failed = count("failed");
   const totalClaims = input.verdicts.length;
-  const verifiable = totalClaims - notVerifiable;
+  // failed claims could not be verified either way, so they do not count toward the
+  // verifiable ratio that drives the document status
+  const verifiable = totalClaims - notVerifiable - failed;
   const claimsRequiringRevision = input.verdicts.filter((v) => v.requiredCorrection !== null).length;
 
   return {

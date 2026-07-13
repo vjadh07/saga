@@ -8,6 +8,7 @@
     "test": "vitest run",
     "verify": "tsx scripts/verify.ts",
     "bench": "tsx scripts/bench.ts",
+    "map": "tsx scripts/map.ts",
     "vendors": "tsx scripts/vendors.ts",
     "viewer": "tsx scripts/viewer.ts",
     "site": "tsx scripts/site.ts",

@@ -71,6 +71,18 @@ export const EvidenceContractSchema = z.object({
 });
 export type EvidenceContract = z.infer<typeof EvidenceContractSchema>;
 
+// ---------- contract evaluation ----------
+
+export interface ContractEvaluation {
+  claimId: string;
+  supportingCriteriaMet: boolean;
+  contradictingCriteriaMet: boolean;
+  primaryRequirementMet: boolean;
+  independentOriginRequirementMet: boolean;
+  triggeredAbstentionConditions: string[];
+  explanation: string;
+}
+
 // ---------- sources and evidence ----------
 
 export interface Source {

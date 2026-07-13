@@ -1,50 +1,46 @@
 import { expect, test } from "vitest";
-import { assessTemporal } from "../src/verify/temporal.js";
+import { assessTemporal, temporalScope } from "../src/verify/temporal.js";
+import type { Claim } from "../src/verify/types.js";
 
 const NOW = "2026-07-10T00:00:00.000Z";
+function claim(p: Partial<Claim>): Claim {
+  return {
+    id: "c", originalText: "x", normalized: "x", claimType: "general",
+    location: { start: 0, end: 1 }, verifiable: true, timeSensitive: false, risk: "medium", status: "contracted", asOf: null, ...p,
+  };
+}
 
-test("support with no newer contradiction is not superseded", () => {
-  const t = assessTemporal({
-    asOf: null,
-    supporting: ["2026-05-01T00:00:00.000Z"],
-    contradicting: [],
-    now: NOW,
-  });
-  expect(t.superseded).toBe(false);
-  expect(t.latestEvidenceAt).toBe("2026-05-01T00:00:00.000Z");
-  expect(t.note).toMatch(/no newer evidence/i);
+test("temporalScope classifies claims by their own dating, never inferring one", () => {
+  expect(temporalScope(claim({ asOf: "2021-01-01T00:00:00.000Z" }))).toBe("historical");
+  expect(temporalScope(claim({ timeSensitive: true }))).toBe("current");
+  expect(temporalScope(claim({ claimType: "prediction" }))).toBe("prediction");
+  expect(temporalScope(claim({}))).toBe("undated");
 });
 
-test("older support plus newer contradiction is superseded and reads as outdated", () => {
-  const t = assessTemporal({
-    asOf: "2024-01-01T00:00:00.000Z",
-    supporting: ["2024-01-15T00:00:00.000Z"],
-    contradicting: ["2026-06-20T00:00:00.000Z"],
-    now: NOW,
-  });
+test("a current claim with newer contradicting evidence is superseded", () => {
+  const t = assessTemporal({ scope: "current", asOf: null, supporting: ["2024-01-01T00:00:00.000Z"], contradicting: ["2026-06-20T00:00:00.000Z"], now: NOW });
   expect(t.superseded).toBe(true);
-  expect(t.claimAsOf).toBe("2024-01-01T00:00:00.000Z");
-  expect(t.latestEvidenceAt).toBe("2026-06-20T00:00:00.000Z");
-  expect(t.note).toMatch(/historically accurate/i);
-  expect(t.note).toMatch(/outdated as of June 2026/);
+  expect(t.note).toMatch(/no longer current/i);
 });
 
-test("contradiction with no supporting evidence is not classified as outdated", () => {
-  const t = assessTemporal({
-    asOf: null,
-    supporting: [],
-    contradicting: ["2026-06-20T00:00:00.000Z"],
-    now: NOW,
-  });
+test("an explicitly historical claim is NOT superseded by later changes", () => {
+  const t = assessTemporal({ scope: "historical", asOf: "2021-01-01T00:00:00.000Z", supporting: ["2021-06-01T00:00:00.000Z"], contradicting: ["2026-06-20T00:00:00.000Z"], now: NOW });
+  expect(t.superseded).toBe(false);
+  expect(t.note).toMatch(/historical|scoped/i);
+});
+
+test("a prediction is not evaluated as outdated", () => {
+  const t = assessTemporal({ scope: "prediction", asOf: null, supporting: [], contradicting: ["2026-06-20T00:00:00.000Z"], now: NOW });
+  expect(t.superseded).toBe(false);
+  expect(t.note).toMatch(/prediction/i);
+});
+
+test("an undated timeless claim is not superseded", () => {
+  const t = assessTemporal({ scope: "undated", asOf: null, supporting: ["2024-01-01T00:00:00.000Z"], contradicting: ["2026-06-20T00:00:00.000Z"], now: NOW });
   expect(t.superseded).toBe(false);
 });
 
-test("newer support than the contradiction is not superseded", () => {
-  const t = assessTemporal({
-    asOf: null,
-    supporting: ["2026-06-25T00:00:00.000Z"],
-    contradicting: ["2026-01-01T00:00:00.000Z"],
-    now: NOW,
-  });
+test("newer support than the contradiction is not superseded even for a current claim", () => {
+  const t = assessTemporal({ scope: "current", asOf: null, supporting: ["2026-06-25T00:00:00.000Z"], contradicting: ["2026-01-01T00:00:00.000Z"], now: NOW });
   expect(t.superseded).toBe(false);
 });

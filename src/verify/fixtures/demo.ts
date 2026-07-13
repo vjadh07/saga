@@ -36,7 +36,9 @@ interface ClaimSpec {
 const CLAIM_SPECS: ClaimSpec[] = [
   { id: "shipments", text: "Northwind shipped 50,000 home battery units in 2025, a company record.", claimType: "numeric", risk: "high", verifiable: true, timeSensitive: false, asOf: null },
   { id: "lifespan", text: "Independent testing confirms the batteries last 40 years with no loss of capacity.", claimType: "numeric", risk: "high", verifiable: true, timeSensitive: false, asOf: null },
-  { id: "market_lead", text: "Northwind is the largest home-battery maker in North America.", claimType: "comparison", risk: "high", verifiable: true, timeSensitive: true, asOf: "2023-01-01T00:00:00.000Z" },
+  // present-tense ("is the largest"), so it is a current claim with no stated date; a newer
+  // independent report showing a rival overtook it makes it outdated. No fabricated asOf.
+  { id: "market_lead", text: "Northwind is the largest home-battery maker in North America.", claimType: "comparison", risk: "high", verifiable: true, timeSensitive: true, asOf: null },
   { id: "recyclable", text: "Northwind batteries are 99% recyclable, making them the sustainable choice.", claimType: "existence", risk: "medium", verifiable: true, timeSensitive: false, asOf: null },
   { id: "experience", text: "Northwind offers the best customer experience in the industry.", claimType: "general", risk: "low", verifiable: false, timeSensitive: false, asOf: null },
 ];

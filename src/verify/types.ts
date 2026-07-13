@@ -205,7 +205,11 @@ export interface SanitizedContent {
 
 // ---------- temporal ----------
 
+export const TEMPORAL_SCOPES = ["historical", "current", "undated", "prediction"] as const;
+export type TemporalScope = (typeof TEMPORAL_SCOPES)[number];
+
 export interface TemporalAssessment {
+  scope: TemporalScope;
   claimAsOf: string | null;
   latestEvidenceAt: string | null;
   superseded: boolean;

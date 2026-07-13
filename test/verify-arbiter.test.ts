@@ -16,6 +16,7 @@ function ev(stance: Stance, relevance: Relevance = "strong"): Evidence {
   };
 }
 const notSuperseded: TemporalAssessment = {
+  scope: "undated",
   claimAsOf: null,
   latestEvidenceAt: null,
   superseded: false,
@@ -75,6 +76,7 @@ test("no relevant evidence abstains as insufficient with low confidence", () => 
 
 test("a superseded claim is outdated and carries the temporal note as its correction", () => {
   const temporal: TemporalAssessment = {
+    scope: "current",
     claimAsOf: "2024-01-01T00:00:00.000Z",
     latestEvidenceAt: "2026-06-20T00:00:00.000Z",
     superseded: true,

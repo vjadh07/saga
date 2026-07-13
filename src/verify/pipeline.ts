@@ -10,7 +10,7 @@ import { citedSources, investigate, skeptic, type CorpusEntry } from "./corpus.j
 import { detectLineage } from "./lineage.js";
 import { buildPassport } from "./passport.js";
 import { sanitizeSource } from "./safety.js";
-import { assessTemporal } from "./temporal.js";
+import { assessTemporal, temporalScope } from "./temporal.js";
 import type { ExecutionMode } from "./mode.js";
 import type { Recorder } from "./recorder.js";
 import type {
@@ -122,7 +122,7 @@ export function runAudit(input: AuditInput): AuditResult {
         evidence: [],
         supportOrigins: 0,
         contraOrigins: 0,
-        temporal: assessTemporal({ asOf: claim.asOf, supporting: [], contradicting: [], now }),
+        temporal: assessTemporal({ scope: temporalScope(claim), asOf: claim.asOf, supporting: [], contradicting: [], now }),
       });
       emit("VERDICT_REACHED", claim.id, { verdict: verdict.verdict, confidence: verdict.confidence });
       claimAudits.push({ claim, contract, evidence: [], verdict });
@@ -158,6 +158,7 @@ export function runAudit(input: AuditInput): AuditResult {
     // supersession is driven only by contradicting evidence: a newer qualification is
     // current context, not grounds to call a claim outdated
     const temporal = assessTemporal({
+      scope: temporalScope(claim),
       asOf: claim.asOf,
       supporting: inv.evidence.map((e) => byId.get(e.sourceId)!.publishedAt),
       contradicting: contras.map((e) => byId.get(e.sourceId)!.publishedAt),

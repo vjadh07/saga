@@ -8,7 +8,8 @@ import type { Confidence, Evidence, TemporalAssessment, Verdict, VerdictKind } f
 export interface ArbiterInput {
   claim: { id: string; verifiable: boolean; timeSensitive: boolean };
   evidence: Evidence[];
-  independentOrigins: number; // independent origins behind the SUPPORTING evidence
+  supportOrigins: number; // independent origins behind the SUPPORTING evidence
+  contraOrigins: number; // independent origins behind the CONTRADICTING evidence
   temporal: TemporalAssessment;
 }
 
@@ -25,10 +26,12 @@ function band(hasStrong: boolean, independentOrigins: number): Confidence {
 }
 
 export function arbitrate(input: ArbiterInput): Verdict {
-  const { claim, evidence, independentOrigins, temporal } = input;
+  const { claim, evidence, supportOrigins, contraOrigins, temporal } = input;
   const base = {
     claimId: claim.id,
-    independentOrigins,
+    // the UI reads this as "independent origins behind support", the number that
+    // collapses when a crowd of sources turns out to be one press release
+    independentOrigins: supportOrigins,
     temporal,
   };
 
@@ -52,7 +55,7 @@ export function arbitrate(input: ArbiterInput): Verdict {
   const strongSupport = supports.some((e) => e.relevance === "strong");
   const strongContra = contradicts.some((e) => e.relevance === "strong");
 
-  const rationale = `${supports.length} supporting and ${contradicts.length} contradicting passage(s) across ${independentOrigins} independent origin(s); ${qualifies.length} qualification(s).`;
+  const rationale = `${supports.length} supporting passage(s) across ${supportOrigins} independent origin(s), ${contradicts.length} contradicting across ${contraOrigins}; ${qualifies.length} qualification(s).`;
 
   let verdict: VerdictKind;
   let confidence: Confidence;
@@ -63,8 +66,9 @@ export function arbitrate(input: ArbiterInput): Verdict {
     confidence = "low";
     requiredCorrection = "Add a citation to an independent source or remove the claim: no supporting evidence was found.";
   } else if (temporal.superseded) {
+    // once true, superseded by newer contradicting evidence: confidence tracks that evidence
     verdict = "outdated";
-    confidence = band(strongContra, independentOrigins);
+    confidence = band(strongContra, contraOrigins);
     requiredCorrection = `Update the claim. ${temporal.note}`;
   } else if (strongSupport && strongContra) {
     verdict = "disputed";
@@ -72,15 +76,15 @@ export function arbitrate(input: ArbiterInput): Verdict {
     requiredCorrection = "Present both sides: credible evidence both supports and contradicts this claim.";
   } else if (contradicts.length > 0 && supports.length === 0) {
     verdict = "contradicted";
-    confidence = band(strongContra, independentOrigins);
+    confidence = band(strongContra, contraOrigins);
     requiredCorrection = `Remove or rewrite: contradicted by ${contradicts.length} source(s).`;
   } else if (supports.length > 0 && qualifies.length > 0) {
     verdict = "supported_with_qualifications";
-    confidence = band(strongSupport, independentOrigins);
+    confidence = band(strongSupport, supportOrigins);
     requiredCorrection = "Add the qualification identified in the evidence so the claim is not overstated.";
   } else if (supports.length > 0) {
     verdict = "supported";
-    confidence = band(strongSupport, independentOrigins);
+    confidence = band(strongSupport, supportOrigins);
   } else {
     // qualifies-only: partial, treat as qualified support with low confidence
     verdict = "supported_with_qualifications";

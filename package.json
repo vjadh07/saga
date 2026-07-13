@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
+    "verify": "tsx scripts/verify.ts",
     "vendors": "tsx scripts/vendors.ts",
     "viewer": "tsx scripts/viewer.ts",
     "site": "tsx scripts/site.ts",

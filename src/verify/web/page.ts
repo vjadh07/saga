@@ -109,6 +109,8 @@ export function renderStudioPage(result: AuditResult): string {
   .status{margin-left:auto;font-weight:650;font-size:14px;padding:6px 14px;border-radius:999px;border:1px solid var(--line)}
   .status.bad{color:var(--bad);border-color:rgba(248,113,113,.4);background:rgba(248,113,113,.08)}
   .status.ok{color:var(--ok);border-color:rgba(74,222,128,.4);background:rgba(74,222,128,.08)}
+  .demobadge{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--warn);border:1px solid rgba(227,179,65,.4);background:rgba(227,179,65,.08);border-radius:999px;padding:5px 12px}
+  .demobadge + .status{margin-left:12px}
   h2{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--faint);margin:0 0 12px;font-weight:650}
   section{padding:28px 0;border-top:1px solid var(--line2)}
   section:first-of-type{border-top:none}
@@ -205,6 +207,7 @@ export function renderStudioPage(result: AuditResult): string {
 <header><div class="wrap">
   <span class="brand">SAGA<b>.</b></span>
   <span class="tagline">Trust, with receipts</span>
+  ${result.mode === "demo" ? '<span class="demobadge">Demo mode</span>' : ""}
   <span id="status" class="status"></span>
 </div></header>
 

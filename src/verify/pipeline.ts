@@ -11,6 +11,7 @@ import { detectLineage } from "./lineage.js";
 import { buildPassport } from "./passport.js";
 import { sanitizeSource } from "./safety.js";
 import { assessTemporal } from "./temporal.js";
+import type { ExecutionMode } from "./mode.js";
 import type { Recorder } from "./recorder.js";
 import type {
   Claim,
@@ -33,10 +34,14 @@ export interface AuditInput {
   corpus: CorpusEntry[];
   now: string;
   recorder?: Recorder;
+  // this deterministic engine runs on a provided corpus, which in practice is a fixture,
+  // so it defaults to demo; the live orchestrator passes real evidence and tags it live
+  mode?: ExecutionMode;
 }
 
 export interface AuditResult {
   auditId: string;
+  mode: ExecutionMode;
   document: string;
   claimAudits: ClaimAudit[];
   lineage: LineageReport;
@@ -55,6 +60,7 @@ const INJECTION_KINDS = new Set<SafetyEvent["kind"]>([
 
 export function runAudit(input: AuditInput): AuditResult {
   const { auditId, document, claims, corpus, now, recorder } = input;
+  const mode: ExecutionMode = input.mode ?? "demo";
 
   // flight-recorder emit: durable if a recorder is present, always mirrored in-memory
   const flight: FlightEvent[] = [];
@@ -182,5 +188,5 @@ export function runAudit(input: AuditInput): AuditResult {
     claimsRequiringRevision: passport.claimsRequiringRevision,
   });
 
-  return { auditId, document, claimAudits, lineage, safetyEvents, passport, correctedDraft, flight };
+  return { auditId, mode, document, claimAudits, lineage, safetyEvents, passport, correctedDraft, flight };
 }

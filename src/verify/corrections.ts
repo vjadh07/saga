@@ -11,7 +11,7 @@ export interface CorrectionItem {
   verdict: Verdict;
 }
 
-function changeKind(verdict: Verdict["verdict"]): ChangeKind {
+export function changeKind(verdict: Verdict["verdict"]): ChangeKind {
   switch (verdict) {
     case "contradicted":
       return "remove";
@@ -27,7 +27,7 @@ function changeKind(verdict: Verdict["verdict"]): ChangeKind {
 // The text that replaces the original span in the proposed draft. Editorial markers
 // make the tracked change visible; the LLM correction pass can replace these with
 // finished prose later.
-function replacementText(original: string, v: Verdict): string {
+export function replacementText(original: string, v: Verdict): string {
   switch (v.verdict) {
     case "contradicted":
       return `[removed - contradicted by evidence: ${v.contradicting.length} source(s)]`;

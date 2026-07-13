@@ -359,6 +359,8 @@ export interface DraftChange {
   original: string;
   replacement: string; // for flag/remove this may wrap or blank the original
   note: string;
+  citations?: string[]; // evidence ids the replacement prose is grounded in
+  source?: "revision_agent" | "deterministic_marker"; // how the replacement was produced
 }
 
 export interface CorrectedDraft {

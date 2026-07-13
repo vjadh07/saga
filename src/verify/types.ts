@@ -133,6 +133,31 @@ export interface Evidence {
   citationAssessment?: CitationAssessment;
 }
 
+// ---------- numeric verification ----------
+
+export const NUMERIC_KINDS = [
+  "percent_change",
+  "ratio",
+  "total",
+  "average",
+  "unit_conversion",
+  "market_share",
+  "date_interval",
+  "none",
+] as const;
+export type NumericKind = (typeof NUMERIC_KINDS)[number];
+
+export interface NumericCheck {
+  claimId: string;
+  kind: NumericKind;
+  expression: string;
+  inputs: Record<string, number>;
+  computedResult: number | null;
+  claimedResult: number | null;
+  matches: boolean | null; // null when there is nothing deterministic to check
+  explanation: string;
+}
+
 // ---------- source quality ----------
 
 export const DIRECTNESS = ["direct", "indirect", "contextual"] as const;

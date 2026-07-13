@@ -92,6 +92,22 @@ export type Stance = (typeof STANCES)[number];
 export const RELEVANCE = ["strong", "weak"] as const;
 export type Relevance = (typeof RELEVANCE)[number];
 
+export const CITATION_RELATIONS = [
+  "direct_support",
+  "partial_support",
+  "qualification",
+  "direct_contradiction",
+  "context_only",
+  "irrelevant",
+] as const;
+export type CitationRelation = (typeof CITATION_RELATIONS)[number];
+
+export interface CitationAssessment {
+  relation: CitationRelation;
+  explanation: string;
+  exactMatchVerified: boolean; // the excerpt was located verbatim in the sanitized source
+}
+
 export interface Evidence {
   id: string;
   claimId: string;
@@ -100,6 +116,9 @@ export interface Evidence {
   excerpt: string; // exact passage from the source
   relevance: Relevance;
   capturedBy: "investigator" | "skeptic";
+  // set once the Citation Verifier has validated the excerpt; only validated evidence
+  // reaches the Arbiter
+  citationAssessment?: CitationAssessment;
 }
 
 // ---------- source lineage ----------

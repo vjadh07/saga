@@ -133,6 +133,27 @@ export interface Evidence {
   citationAssessment?: CitationAssessment;
 }
 
+// ---------- source quality ----------
+
+export const DIRECTNESS = ["direct", "indirect", "contextual"] as const;
+export type Directness = (typeof DIRECTNESS)[number];
+
+export const INDEPENDENCE = ["independent", "derived", "unknown"] as const;
+export type Independence = (typeof INDEPENDENCE)[number];
+
+export interface SourceQualityAssessment {
+  sourceId: string;
+  sourceType: SourceType;
+  directness: Directness;
+  independence: Independence;
+  methodologyVisible: boolean | null;
+  promotional: boolean;
+  strengths: string[];
+  weaknesses: string[];
+  accepted: boolean;
+  rejectionReason: string | null;
+}
+
 // ---------- source lineage ----------
 
 export const LINEAGE_SIGNALS = [

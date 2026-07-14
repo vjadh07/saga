@@ -59,6 +59,8 @@ test("an explicit Demo initial view reveals only a deterministic demo", () => {
   expect(html).toMatch(/id="live-view"[^>]*hidden/);
   expect(html).not.toMatch(/id="result-view"[^>]*hidden/);
   expect(html).toContain("Deterministic demo audit");
+  expect(html).toContain("Demo: fixed fictional example.");
+  expect(html).toContain("does not search the live web");
 });
 
 test("a live-only result routes the Demo control to the deterministic guest demo", () => {
@@ -114,7 +116,8 @@ test("mode controls, input, live state, and claim selection have accessible sema
   expect(html).toContain(":focus-visible");
   expect(html).toContain("'<button type=\"button\" class=\"claim-mark '");
   expect(html).toContain("@media(max-width:640px)");
-  expect(html).toContain(".stats{grid-template-columns:repeat(2,1fr)}");
+  expect(html).toContain("prefers-reduced-motion:reduce");
+  expect(html).toContain('<details class="proof"');
 });
 
 test("failed claim verdicts have an explicit label and visual class", () => {
@@ -126,13 +129,19 @@ test("failed claim verdicts have an explicit label and visual class", () => {
   expect(html).toContain(".claim-mark.v-fail");
 });
 
-test("the page embeds the audit data and key result surfaces", () => {
+test("the page leads with plain-language decisions and progressively disclosed proof", () => {
   const html = renderStudioPage(demo);
-  expect(html).toContain("Trust Passport");
-  expect(html).toContain("Agent Flight Recorder");
-  expect(html).toContain("Source lineage");
-  expect(html).toContain("Safety Sentinel");
+  const visibleMarkup = html.split('<script id="studio-bootstrap"')[0];
+  expect(html).toContain("Audit summary");
+  expect(html).toContain("Review the flagged claims");
+  expect(html).toContain("What Saga found");
   expect(html).toContain("Corrected draft");
+  expect(html).toContain("How Saga checked this");
+  expect(html).toContain("Source independence");
+  expect(html).toContain("Blocked source instructions");
+  expect(html).toContain("Verification receipt");
+  expect(visibleMarkup).not.toContain("Agent Flight Recorder");
+  expect(visibleMarkup).not.toContain("Safety Sentinel");
   expect(html).toContain("demo-aud");
   expect(html).toContain("nw-release");
   expect(html).toContain("reviewspam");

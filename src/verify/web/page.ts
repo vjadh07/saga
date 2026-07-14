@@ -3,7 +3,6 @@
 // persisted results returned by the live audit API.
 import type { LiveAuditResult } from "../live/audit.js";
 import type { AuditResult } from "../pipeline.js";
-import { verdictLabel } from "../render.js";
 import type { VerdictKind } from "../types.js";
 
 export type StudioInitialView = "live" | "demo";
@@ -35,12 +34,23 @@ const VERDICT_KINDS: VerdictKind[] = [
   "failed",
 ];
 
+const VERDICT_LABELS: Record<VerdictKind, string> = {
+  supported: "Supported",
+  supported_with_qualifications: "Needs context",
+  contradicted: "Evidence says this is wrong",
+  disputed: "Reliable sources disagree",
+  outdated: "Out of date",
+  insufficient_evidence: "Not enough reliable evidence",
+  not_verifiable: "Opinion, not a factual claim",
+  failed: "Audit failed",
+};
+
 const DOCUMENT_STATUS_LABELS: Record<string, string> = {
-  strongly_supported: "Strongly supported",
-  mostly_supported: "Mostly supported",
-  revision_required: "Revision required",
-  insufficiently_supported: "Insufficiently supported",
-  materially_contradicted: "Materially contradicted",
+  strongly_supported: "Ready to publish",
+  mostly_supported: "Mostly ready",
+  revision_required: "Changes needed",
+  insufficiently_supported: "More evidence needed",
+  materially_contradicted: "Do not publish yet",
 };
 
 const AUDIT_STATUS_LABELS: Record<string, string> = {
@@ -50,11 +60,11 @@ const AUDIT_STATUS_LABELS: Record<string, string> = {
   researching_support: "Researching support",
   researching_counterevidence: "Researching counterevidence",
   validating_evidence: "Validating evidence",
-  analyzing_lineage: "Analyzing source lineage",
-  validating_temporal: "Validating dates",
-  validating_numeric: "Validating numbers",
-  arbitrating: "Arbitrating claims",
-  generating_revision: "Generating corrected draft",
+  analyzing_lineage: "Checking source independence",
+  validating_temporal: "Checking dates",
+  validating_numeric: "Rechecking numbers",
+  arbitrating: "Weighing the evidence",
+  generating_revision: "Writing evidence-backed corrections",
   completed: "Completed",
   partially_completed: "Partially completed",
   failed: "Failed",
@@ -68,7 +78,7 @@ export function renderStudioPage(result: StudioResult, options: StudioPageOption
   const requestedView = options.initialView ?? "live";
   const initialView: StudioInitialView = embeddedMode === "live" ? "live" : requestedView;
   const resultInitiallyVisible = embeddedMode === initialView;
-  const labels = Object.fromEntries(VERDICT_KINDS.map((kind) => [kind, verdictLabel(kind)]));
+  const labels = Object.fromEntries(VERDICT_KINDS.map((kind) => [kind, VERDICT_LABELS[kind]]));
   const bootstrap = JSON.stringify({
     embeddedResult: result,
     initialView,
@@ -77,79 +87,138 @@ export function renderStudioPage(result: StudioResult, options: StudioPageOption
 
   return `<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark">
-<title>Saga audit workspace</title>
+<meta name="color-scheme" content="light">
+<title>Saga | Verify before you publish</title>
 <style>
-  :root{--bg:#08090b;--panel:#0f1216;--panel2:#0b0e12;--line:rgba(255,255,255,.09);--line2:rgba(255,255,255,.05);
-    --text:#eef1f5;--dim:#98a2ad;--faint:#7d8792;--accent:#4ade80;--ink:#04170b;
-    --ok:#4ade80;--warn:#e3b341;--bad:#f87171;--old:#f0883e;--disp:#bc8cff;--none:#8b949e;--subj:#5aa2f0;
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+  /* Judge-first editorial workspace */
+  :root{--bg:#f4f6f3;--panel:#fff;--panel2:#f7f8f6;--line:#dce2dd;--line2:#e9ede9;
+    --text:#16201a;--dim:#46524b;--faint:#69756e;--accent:#176b45;--ink:#fff;
+    --ok:#176b45;--warn:#8a5a0a;--bad:#a33a32;--old:#a24b1a;--disp:#6646a3;--none:#66716b;--subj:#2f628c;
+    --sans:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
   *{box-sizing:border-box;margin:0;padding:0}
   [hidden]{display:none!important}
-  body{background:var(--bg);color:var(--text);font:15px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
-  code,.mono{font-family:var(--mono)}
-  button,input,textarea{font:inherit}
-  button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-  .wrap{max-width:1320px;margin:0 auto;padding:0 20px}
-  header{border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(8,9,11,.88);backdrop-filter:blur(10px);z-index:5}
-  header .wrap{display:flex;align-items:center;gap:14px;min-height:60px}
-  .brand{font-family:var(--mono);font-weight:700;letter-spacing:.14em;font-size:14px}.brand b{color:var(--accent)}
-  .tagline{color:var(--faint);font-size:13px}
-  .view-switch{display:flex;gap:4px;margin-left:auto;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
-  .view-switch button{border:0;border-radius:7px;background:transparent;color:var(--dim);padding:5px 12px;cursor:pointer;font-size:13px}
-  .view-switch button[aria-pressed="true"]{background:rgba(74,222,128,.11);color:var(--accent)}
-  .modebadge{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;border:1px solid var(--line);border-radius:999px;padding:4px 10px}
-  .modebadge.live{color:var(--accent);border-color:rgba(74,222,128,.35)}
-  .modebadge.demo{color:var(--warn);border-color:rgba(227,179,65,.4);background:rgba(227,179,65,.07)}
-  .status{font-weight:650;font-size:13px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
-  .status.bad{color:var(--bad);border-color:rgba(248,113,113,.4);background:rgba(248,113,113,.08)}
-  .status.ok{color:var(--ok);border-color:rgba(74,222,128,.4);background:rgba(74,222,128,.08)}
-  .status.warn{color:var(--warn);border-color:rgba(227,179,65,.4);background:rgba(227,179,65,.08)}
-  h2{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--faint);margin:0 0 12px;font-weight:650}
-  section{padding:28px 0;border-top:1px solid var(--line2)}section:first-of-type{border-top:none}
-  .dim,.note{color:var(--faint)}.note{font-size:12px;margin-top:10px}
-  .input-label{display:block;font-weight:650;margin-bottom:8px}
-  #intext{width:100%;min-height:150px;resize:vertical;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:14px;font:14px/1.6 var(--sans)}
-  #intext::placeholder{color:var(--faint)}#intext:focus{border-color:rgba(74,222,128,.55)}
-  .inputctl{display:flex;align-items:end;gap:16px;flex-wrap:wrap;margin-top:12px}
-  .modes{display:flex;gap:6px;border:0;min-width:0}.modes legend{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-  .modes label{font-size:13px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:6px}.modes input{accent-color:var(--accent)}
-  .btn{border:1px solid var(--line);border-radius:10px;padding:9px 18px;font-weight:650;font-size:14px;cursor:pointer;background:var(--panel);color:var(--text)}
-  .btn:hover{border-color:rgba(74,222,128,.42)}.btn:disabled{opacity:.5;cursor:default}
-  .btn-run{margin-left:auto;background:var(--accent);color:var(--ink);border-color:transparent;padding:10px 24px}.btn-run:hover{background:#6ce599}
-  .btn-danger{color:var(--bad);border-color:rgba(248,113,113,.35)}
-  .live-state{margin-top:18px;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--panel)}
-  .live-head{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.live-head p{font-weight:650}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--text);font:16px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+  code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  button,input,textarea,summary{font:inherit}
+  button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid rgba(23,107,69,.28);outline-offset:3px}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+  header{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.94);border-bottom:1px solid var(--line);backdrop-filter:blur(14px)}
+  header .wrap{display:flex;align-items:center;min-height:68px;gap:12px}
+  .brand{display:inline-flex;align-items:center;gap:10px;font-family:var(--sans);font-size:18px;letter-spacing:-.02em;color:var(--text)}
+  .brand::before{content:"S";display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--text);color:#fff;font-size:15px;font-weight:750}
+  .brand b{display:none}
+  .tagline{font-size:13px;color:var(--faint);border-left:1px solid var(--line);padding-left:12px}
+  .view-switch{display:flex;margin-left:auto;gap:2px;padding:3px;background:#edf1ed;border:1px solid transparent;border-radius:9px}
+  .view-switch button{min-height:36px;padding:6px 13px;color:var(--dim);border-radius:7px;font-weight:650}
+  .view-switch button:hover{color:var(--text)}
+  .view-switch button[aria-pressed="true"]{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(20,33,25,.12)}
+  .modebadge{display:inline-block;font-family:var(--sans);font-size:11px;font-weight:750;letter-spacing:.04em;border:1px solid var(--line);border-radius:7px;padding:5px 8px}
+  .modebadge.live{color:var(--ok);border-color:#b8dac8;background:#edf8f2}
+  .modebadge.demo{color:var(--warn);border-color:#e6d2a7;background:#fff8e8}
+  .status{font-size:12px;font-weight:650;padding:5px 9px;border:0;border-radius:999px;background:transparent;color:var(--faint);white-space:nowrap}
+  .status.bad{color:var(--bad);background:#fff0ee}.status.ok{color:var(--ok);background:#edf8f2}.status.warn{color:var(--warn);background:#fff8e8}
+  main.wrap{padding-bottom:64px}
+  section{padding:48px 0;border-color:var(--line)}
+  h1{font-size:clamp(34px,5vw,56px);line-height:1.08;letter-spacing:-.045em;font-weight:720}
+  h2{font-size:26px;line-height:1.2;letter-spacing:-.025em;text-transform:none;color:var(--text);margin:0 0 10px;font-weight:700}
+  h3{font-size:15px;line-height:1.3;font-weight:700}
+  .dim,.note{color:var(--faint)}.note{font-size:13px}
+  .live-intro{max-width:730px;margin-bottom:28px}.live-intro h1{font-size:clamp(36px,5vw,58px)}.live-intro p{font-size:18px;color:var(--dim);margin-top:14px;max-width:640px}
+  .composer{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:0 14px 40px rgba(23,38,28,.06)}
+  .input-label{display:block;font-size:15px;font-weight:650;margin-bottom:9px}
+  #intext{width:100%;min-height:190px;resize:vertical;background:#fbfcfb;color:var(--text);border:1px solid #cdd5cf;border-radius:10px;padding:16px;font-size:15px}
+  #intext::placeholder{color:var(--faint)}
+  #intext:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(23,107,69,.08)}
+  .inputctl{display:flex;align-items:center;flex-wrap:wrap;margin-top:14px;gap:12px}
+  .modes{display:flex;gap:4px;padding:3px;background:#f0f3f0;border:0;border-radius:9px}
+  .modes legend{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .modes label{display:flex;align-items:center;gap:6px;min-height:38px;border:0;border-radius:7px;padding:6px 11px;color:var(--dim);background:transparent;cursor:pointer}
+  .modes label:has(input:checked){background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(20,33,25,.12)}
+  .modes input{width:14px;height:14px;accent-color:var(--accent)}
+  .btn{min-height:42px;border:1px solid #cdd5cf;border-radius:9px;padding:8px 16px;background:#fff;color:var(--text);cursor:pointer;transition:border-color .18s ease,background-color .18s ease,transform .18s ease}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn:hover{border-color:#97a79d}.btn:active{transform:translateY(1px)}
+  .btn-run{margin-left:auto;background:var(--text);color:#fff;border-color:var(--text);padding:9px 22px}.btn-run:hover{background:#2a352e;border-color:#2a352e}
+  .btn-danger{color:var(--bad);border-color:#e7c3bf}
+  .live-state{margin-top:14px;padding:13px 14px;border:1px solid var(--line);border-radius:10px;background:#f7f9f7}
+  .live-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.live-head p{font-size:14px;font-weight:650}
   .live-actions{display:flex;gap:8px;margin-left:auto}
-  .live-error{border:1px solid rgba(248,113,113,.4);background:rgba(248,113,113,.06);border-radius:10px;padding:12px;margin-top:12px;color:#f3c8c8;font-size:13px}
-  .live-events{margin-top:12px}
-  .result-kicker{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);border:1px solid rgba(74,222,128,.35);border-radius:999px;padding:4px 12px;margin-bottom:16px}
-  .result-kicker.demo{color:var(--warn);border-color:rgba(227,179,65,.4)}
-  .stats{display:grid;grid-template-columns:repeat(10,1fr);gap:10px}
-  .stat{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--panel)}.stat .num{font-family:var(--mono);font-size:22px;font-weight:650}.stat .lbl{color:var(--faint);font-size:11px;margin-top:4px;text-transform:uppercase;letter-spacing:.04em}
-  .stat.v-ok .num{color:var(--ok)}.stat.v-warn .num{color:var(--warn)}.stat.v-bad .num,.stat.v-fail .num{color:var(--bad)}.stat.v-old .num{color:var(--old)}.stat.v-none .num{color:var(--none)}.stat.v-subj .num{color:var(--subj)}
-  .work{display:grid;grid-template-columns:1.15fr 1fr 1.15fr;gap:14px;align-items:start}.pane{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:16px;min-height:280px}.pane h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);margin-bottom:12px;font-weight:650}
-  .doc{white-space:pre-wrap;line-height:1.9;font-size:15px}.claim-mark{display:inline;background:transparent;color:inherit;border:0;border-bottom:2px solid var(--faint);cursor:pointer;padding:1px 0;border-radius:2px;text-align:left}.claim-mark:hover{background:rgba(255,255,255,.05)}.claim-mark.sel{background:rgba(74,222,128,.1)}
+  .live-error{margin-top:12px;padding:12px;border:1px solid #ebc5c1;border-radius:9px;background:#fff1ef;color:#7d2d27;font-size:13px}
+  .live-events h2{font-size:15px;margin-top:16px}
+  .result-hero{padding-top:54px;padding-bottom:38px}
+  .demo-notice{display:flex;gap:10px;align-items:flex-start;margin-bottom:28px;padding:12px 14px;background:#fff8e8;border:1px solid #ead8b4;border-radius:10px;color:#65440c;font-size:13px}
+  .demo-notice::before{content:"i";display:grid;place-items:center;flex:0 0 auto;width:20px;height:20px;border:1px solid #c79b49;border-radius:50%;font-weight:750;font-family:Georgia,serif}
+  .result-kicker{display:inline-block;font-family:var(--sans);font-size:12px;font-weight:750;letter-spacing:0;text-transform:none;color:var(--ok);background:#edf8f2;border:1px solid #bedeca;border-radius:7px;padding:4px 9px;margin-bottom:18px}
+  .result-kicker.demo{color:var(--warn);background:#fff8e8;border-color:#e6d2a7}
+  .summary-label{margin-bottom:8px;color:var(--faint);font-size:13px;font-weight:680}
+  .hero-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(270px,.65fr);gap:52px;align-items:end}
+  #result-title{max-width:760px}
+  .result-lead{font-size:18px;line-height:1.55;color:var(--dim);max-width:720px;margin-top:16px}
+  .hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}
+  .action{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:9px 15px;border:1px solid #cdd5cf;border-radius:9px;color:var(--text);text-decoration:none;font-weight:680;font-size:14px;background:#fff}
+  .action.primary{background:var(--text);border-color:var(--text);color:#fff}.action:hover{border-color:#95a39a}.action.primary:hover{background:#2a352e}
+  .stats{display:grid;grid-template-columns:1fr;gap:0;background:#fff;border:1px solid var(--line);border-radius:14px;padding:4px 18px}
+  .stat{display:grid;grid-template-columns:auto 1fr;align-items:baseline;gap:10px;border:0;border-bottom:1px solid var(--line2);border-radius:0;padding:13px 0;background:transparent}
+  .stat:last-child{border-bottom:0}.stat .num{font-family:var(--sans);font-size:24px;line-height:1;font-weight:730;color:var(--text)!important}.stat .lbl{font-size:13px;color:var(--faint);letter-spacing:0;text-transform:none;margin:0}
+  .breakdown{display:flex;flex-wrap:wrap;gap:7px;margin-top:20px}
+  .count-chip{font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:4px 9px;background:#fff}
+  .count-chip.v-ok{color:var(--ok);border-color:#c2dfcf;background:#f2faf5}.count-chip.v-bad{color:var(--bad);border-color:#ecc8c4;background:#fff4f2}.count-chip.v-warn,.count-chip.v-old{color:var(--warn);border-color:#ead9b8;background:#fff9ed}.count-chip.v-subj{color:var(--subj);border-color:#cbdcea;background:#f3f8fc}
+  .insights{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:28px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .insight{padding:17px 22px 17px 0;margin-right:22px;border-right:1px solid var(--line);font-size:14px;color:var(--dim)}
+  .insight:last-child{border-right:0;margin-right:0}.insight b{display:block;color:var(--text);margin-bottom:3px}
+  .section-head{display:flex;justify-content:space-between;gap:32px;align-items:end;margin-bottom:22px}.section-head p{max-width:520px;color:var(--faint);font-size:14px}
+  .work{display:grid;grid-template-columns:minmax(0,1.04fr) minmax(360px,.96fr);gap:0;align-items:start;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff}
+  .pane{border:0;border-radius:0;background:#fff;padding:24px;min-height:420px}.pane+.pane{border-left:1px solid var(--line)}
+  .pane h3{font-size:14px;text-transform:none;letter-spacing:0;color:var(--text);margin-bottom:16px}
+  .doc{white-space:pre-wrap;font-size:16px;line-height:2.05;color:#344039}
+  .claim-mark{display:inline;min-height:28px;padding:1px 0;border:0;border-bottom:2px solid var(--faint);border-radius:2px;background:transparent;color:inherit;text-align:left;cursor:pointer;transition:background-color .18s ease,box-shadow .18s ease}
+  .claim-mark:hover{background:#f1f4f1}.claim-mark.sel{background:#fff1cf;box-shadow:0 0 0 2px #fff1cf}
   .claim-mark.v-ok{border-color:var(--ok)}.claim-mark.v-warn{border-color:var(--warn)}.claim-mark.v-bad{border-color:var(--bad)}.claim-mark.v-old{border-color:var(--old)}.claim-mark.v-disp{border-color:var(--disp)}.claim-mark.v-none{border-color:var(--none)}.claim-mark.v-subj{border-color:var(--subj)}.claim-mark.v-fail{border-color:var(--bad);border-bottom-style:dashed}
-  .verdict-badge{display:inline-block;font-weight:650;font-size:13px;padding:4px 12px;border-radius:999px;border:1px solid var(--line)}.verdict-badge.v-ok{color:var(--ok);border-color:rgba(74,222,128,.4)}.verdict-badge.v-warn{color:var(--warn);border-color:rgba(227,179,65,.4)}.verdict-badge.v-bad{color:var(--bad);border-color:rgba(248,113,113,.4)}.verdict-badge.v-old{color:var(--old);border-color:rgba(240,136,62,.4)}.verdict-badge.v-disp{color:var(--disp);border-color:rgba(188,140,255,.4)}.verdict-badge.v-none{color:var(--none)}.verdict-badge.v-subj{color:var(--subj);border-color:rgba(90,162,240,.4)}.verdict-badge.v-fail{color:var(--bad);border:1px dashed rgba(248,113,113,.6)}
-  .kv{color:var(--dim);font-size:13px;margin:10px 0}.kv b{color:var(--text);font-weight:600}.claimtext{font-size:15px;line-height:1.5;margin:6px 0 14px}.conf{font-family:var(--mono);font-size:12px;color:var(--faint)}
-  .ev{border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:10px;background:var(--panel2)}.ev .src{font-family:var(--mono);font-size:11px;color:var(--accent)}.ev.against .src{color:var(--bad)}.ev .ex{font-size:13px;color:var(--dim);margin-top:5px}.ev .st{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);float:right}.correction{margin-top:12px;padding:10px;border:1px dashed var(--line);border-radius:8px;color:var(--warn);font-size:13px}
-  .log{list-style:none;font-family:var(--mono);font-size:12.5px;line-height:1.9;max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel2)}.log li .mk{display:inline-block;width:16px;color:var(--faint)}.log li.ok .mk{color:var(--ok)}.log li.warn .mk{color:var(--bad)}.log li.warn{color:#f3c8c8}
-  .lgroup{border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--panel);display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;margin-bottom:10px}.lorigin{display:flex;flex-direction:column;gap:6px;align-items:flex-start}.lnode{font-family:var(--mono);font-size:12px;border:1px solid var(--line);border-radius:8px;padding:5px 10px;background:var(--panel2);color:var(--dim)}.lnode.origin{color:var(--accent);border-color:rgba(74,222,128,.45);background:rgba(74,222,128,.07)}.ltag{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint)}.lfan{display:flex;flex-wrap:wrap;gap:8px}.lnote{grid-column:1/-1;color:var(--faint);font-size:12px;border-top:1px solid var(--line2);padding-top:10px}
-  .safe{border:1px solid rgba(248,113,113,.35);border-radius:12px;padding:14px;background:rgba(248,113,113,.05);margin-bottom:10px}.stag{font-family:var(--mono);font-size:11px;color:var(--bad);text-transform:uppercase;letter-spacing:.06em}.ssrc{color:var(--faint);font-size:12px;margin:6px 0}.safe code{display:block;font-size:12.5px;color:var(--dim);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:4px}
-  .draftgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}.change{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--panel)}.chead{display:flex;align-items:center;gap:8px;font-size:12px}.ckind{font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--warn)}.toggle{margin-left:auto;color:var(--dim);font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer}.cnote{color:var(--dim);font-size:12.5px;margin:8px 0}.cbefore{color:var(--faint);font-size:13px}.cbefore s{color:var(--bad)}.cafter{color:var(--ok);font-size:13px;margin-top:4px}.draftout{white-space:pre-wrap;line-height:1.9;font-size:14px;border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--panel2)}.draftout ins{text-decoration:none;color:var(--ok);background:rgba(74,222,128,.08);border-radius:3px;padding:0 2px}
-  .receipt{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.receipt div{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel)}.receipt dt{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.05em}.receipt dd{font-family:var(--mono);font-size:12px;margin-top:5px;overflow-wrap:anywhere}
-  .empty-view{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:22px;margin-top:28px}
-  @media(max-width:1000px){.stats{grid-template-columns:repeat(5,1fr)}.work,.draftgrid{grid-template-columns:1fr}.receipt{grid-template-columns:1fr}.btn-run{margin-left:0}}
-  @media(max-width:640px){.wrap{padding:0 14px}header .wrap{padding-top:9px;padding-bottom:9px;flex-wrap:wrap}.tagline{display:none}.view-switch{margin-left:auto}.modebadge{order:4}.status{order:5;margin-left:auto}.stats{grid-template-columns:repeat(2,1fr)}.modes{display:grid;grid-template-columns:1fr 1fr;width:100%}.modes label:last-child{grid-column:1/-1}.inputctl{align-items:stretch}.btn-run{width:100%}.live-actions{width:100%;margin-left:0}.live-actions .btn{flex:1}.lgroup{grid-template-columns:1fr}.lnote{grid-column:1}.lfan{display:grid;grid-template-columns:1fr 1fr}.lnode{overflow-wrap:anywhere}}
+  .finding-label{font-size:12px;color:var(--faint);margin-bottom:8px}
+  .verdict-badge{display:inline-block;font-size:12px;font-weight:650;padding:4px 9px;border:1px solid var(--line);border-radius:7px;background:#f5f7f5}
+  .verdict-badge.v-ok{color:var(--ok)}.verdict-badge.v-warn{color:var(--warn)}.verdict-badge.v-bad,.verdict-badge.v-fail{color:var(--bad)}.verdict-badge.v-old{color:var(--old)}.verdict-badge.v-disp{color:var(--disp)}.verdict-badge.v-none{color:var(--none)}.verdict-badge.v-subj{color:var(--subj)}
+  .verdict-badge.v-ok{background:#edf8f2;border-color:#c1dfce}.verdict-badge.v-warn,.verdict-badge.v-old{background:#fff8e8;border-color:#e7d4ae}.verdict-badge.v-bad,.verdict-badge.v-fail{background:#fff0ee;border-color:#ebc8c4}.verdict-badge.v-disp{background:#f5f1fb}.verdict-badge.v-subj{background:#f0f6fb}
+  .conf{font-family:var(--sans);font-size:12px;color:var(--faint);margin-left:5px}
+  .claimtext{font-size:19px;line-height:1.45;margin:16px 0;color:var(--text);font-weight:620}
+  .reason{color:var(--dim);font-size:14px;padding-top:14px;border-top:1px solid var(--line)}
+  .reason b{display:block;color:var(--text);margin-bottom:4px}
+  .kv{margin:10px 0;font-size:13px;color:var(--faint)}.kv b{color:var(--dim);font-weight:600}
+  .claim-meta{margin-top:14px}.claim-meta summary{cursor:pointer;color:var(--faint);font-size:13px;min-height:40px;display:flex;align-items:center}.claim-meta summary:hover{color:var(--text)}
+  .correction{margin-top:16px;padding:13px 14px;border:0;border-left:3px solid #c18421;border-radius:0 8px 8px 0;background:#fff8e8;color:#63420d;font-size:14px}
+  .evidence-panel{margin-top:18px;border-top:1px solid var(--line);padding-top:3px}.evidence-panel summary{cursor:pointer;min-height:48px;display:flex;align-items:center;font-weight:680;font-size:14px;color:var(--text)}
+  .ev{border:0;border-top:1px solid var(--line2);border-radius:0;padding:13px 0;margin:0;background:transparent}.ev .src{font-family:var(--sans);font-weight:680;font-size:12px;color:var(--ok)}.ev.against .src{color:var(--bad)}.ev .ex{font-size:13px;line-height:1.55;color:var(--dim);margin-top:6px}.ev .st{float:right;font-size:11px;letter-spacing:0;text-transform:none;color:var(--faint)}
+  .draft-section{background:#eef2ee;margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);padding-left:max(28px,calc((100vw - 1124px)/2));padding-right:max(28px,calc((100vw - 1124px)/2))}
+  .draftgrid{display:grid;grid-template-columns:minmax(300px,.8fr) minmax(0,1.2fr);gap:28px;align-items:start}
+  .change{border:0;border-bottom:1px solid #d8ded9;border-radius:0;padding:0 0 18px;margin-bottom:18px;background:transparent}
+  .chead{display:flex;align-items:center;gap:8px;font-size:12px}.ckind{font-family:var(--sans);font-weight:750;letter-spacing:0;text-transform:none;color:var(--warn)}.toggle{display:flex;align-items:center;gap:5px;margin-left:auto;font-size:13px;color:var(--text);min-height:36px;cursor:pointer}
+  .toggle input{width:16px;height:16px;accent-color:var(--accent)}
+  .cnote{font-size:13px;color:var(--dim);margin:8px 0}.cbefore,.cafter{font-size:13px;line-height:1.5}.cbefore s{color:#8e4b45}.cafter{color:var(--ok);margin-top:7px;font-weight:620}
+  .draft-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px;position:sticky;top:88px}.draft-card h3{margin-bottom:13px}
+  .draftout{white-space:pre-wrap;font-size:15px;line-height:1.8;border:0;border-radius:0;padding:0;background:#fff}.draftout ins{text-decoration:none;color:#125d3d;background:#e3f4ea;padding:1px 2px}
+  .proof-section{padding-bottom:16px}.proof{border:1px solid var(--line);border-radius:14px;background:#fff;overflow:hidden}
+  .proof>summary{display:flex;align-items:center;justify-content:space-between;gap:20px;cursor:pointer;list-style:none;padding:20px 22px;min-height:78px}.proof>summary::-webkit-details-marker{display:none}
+  .proof>summary strong{display:block;font-size:17px}.proof>summary small{display:block;font-size:13px;color:var(--faint);font-weight:400;margin-top:2px}
+  .proof>summary::after{content:"+";font-size:24px;color:var(--faint);line-height:1}.proof[open]>summary::after{content:"−"}
+  .proof-body{border-top:1px solid var(--line);padding:0 22px 22px}.proof-block{padding:24px 0;border-bottom:1px solid var(--line)}.proof-block:last-child{border-bottom:0}.proof-block h3{font-size:17px;margin-bottom:5px}.proof-copy{font-size:13px;color:var(--faint);margin-bottom:16px}
+  .proof-grid{display:grid;grid-template-columns:1fr 1fr;gap:30px}
+  .log{list-style:none;font-family:var(--sans);font-size:13px;line-height:1.55;max-height:300px;overflow:auto;border:0;border-radius:0;padding:0;background:transparent}.log li{position:relative;padding:9px 0 9px 24px;border-bottom:1px solid var(--line2)}.log li:last-child{border-bottom:0}.log li .mk{position:absolute;left:0;top:9px;width:16px;font-weight:800}
+  .log li.warn{color:#7e332d}.log li.ok{color:#215c40}
+  .lgroup{display:grid;grid-template-columns:auto 1fr;align-items:center;border:0;border-top:1px solid var(--line);border-radius:0;padding:15px 0;background:transparent;gap:12px;margin:0}.lorigin{display:flex;flex-direction:column;gap:6px;align-items:flex-start}.lnode{font-family:var(--sans);font-size:12px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:#f4f6f4;color:var(--dim)}.lnode.origin{color:var(--ok);border-color:#bfdccb;background:#eef8f2}.ltag{font-size:10px;color:var(--faint)}.lfan{display:flex;flex-wrap:wrap;gap:8px}.lnote{grid-column:1/-1;padding-top:10px;border-top:1px solid var(--line2);font-size:12px;color:var(--faint)}
+  .safe{border:0;border-left:3px solid #d09a94;border-radius:0 8px 8px 0;padding:12px 13px;background:#fff3f1;margin-bottom:10px}.stag{font-family:var(--sans);font-size:12px;font-weight:750;letter-spacing:0;text-transform:none;color:var(--bad)}.ssrc{margin:6px 0;font-size:12px;color:var(--faint)}.safe code{display:block;margin-top:4px;padding:10px;border:1px solid #ebd7d4;border-radius:8px;font-size:12px;background:#fff;color:var(--dim)}
+  .receipt{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.receipt div{border:1px solid var(--line);border-radius:8px;padding:10px;background:#f8faf8}.receipt dt{font-size:11px;letter-spacing:0;text-transform:none;color:var(--faint)}.receipt dd{margin-top:5px;font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere}
+  .empty-view{margin-top:28px;padding:22px;background:#fff;border:1px solid var(--line);border-radius:14px}
+  @media(max-width:900px){.hero-grid{grid-template-columns:1fr;gap:24px}.stats{grid-template-columns:repeat(3,1fr)}.stat{display:block;border-bottom:0;border-right:1px solid var(--line2);padding:14px}.stat:last-child{border-right:0}.work,.draftgrid{grid-template-columns:1fr}.pane+.pane{border-left:0;border-top:1px solid var(--line)}.draft-card{position:static}.proof-grid{grid-template-columns:1fr}.insights{grid-template-columns:1fr}.insight{border-right:0;border-bottom:1px solid var(--line);margin-right:0;padding:14px 0}.insight:last-child{border-bottom:0}.receipt{grid-template-columns:1fr}}
+  @media(max-width:640px){.wrap{padding-left:18px;padding-right:18px}header .wrap{min-height:62px;gap:8px}.brand{font-size:16px}.brand::before{width:29px;height:29px}.view-switch{order:3;width:100%;margin:0}.view-switch button{flex:1}.modebadge{margin-left:auto}.status{display:none}section{padding:34px 0}.live-intro{margin-bottom:20px}.composer{padding:16px}.inputctl{display:block}.modes{display:grid;grid-template-columns:1fr;width:100%}.modes label:last-child{grid-column:auto}.btn-run{width:100%;margin-top:12px}.hero-grid{gap:20px}.stats{grid-template-columns:1fr;padding:4px 15px}.stat{display:grid;border-right:0;border-bottom:1px solid var(--line2);padding:12px 0}.hero-actions{display:grid}.action{width:100%}.section-head{display:block}.section-head p{margin-top:8px}.pane{padding:18px}.work{border-radius:12px}.draft-section{padding-left:18px;padding-right:18px}.proof>summary{padding:16px}.proof-body{padding:0 16px 16px}.proof-grid{gap:0}.lgroup{grid-template-columns:1fr}.lnote{grid-column:1}.lfan{display:flex}.receipt{grid-template-columns:1fr}}
+  @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}
 </style>
 
 <header><div class="wrap">
-  <span class="brand">SAGA<b>.</b></span>
-  <span class="tagline">Trust, with receipts</span>
+  <span class="brand">Saga<b>.</b></span>
+  <span class="tagline">Check claims. Fix the draft.</span>
   <div class="view-switch" role="group" aria-label="Audit view">
-    <button type="button" id="view-live" aria-pressed="${initialView === "live"}">Live</button>
-    <button type="button" id="view-demo" aria-pressed="${initialView === "demo"}">Demo</button>
+    <button type="button" id="view-live" aria-pressed="${initialView === "live"}">Check text</button>
+    <button type="button" id="view-demo" aria-pressed="${initialView === "demo"}">Sample audit</button>
   </div>
   <span id="modebadge" class="modebadge ${initialView}">${initialView === "demo" ? "Demo mode" : "Live mode"}</span>
   <span id="status" class="status">${initialView === "demo" ? "Deterministic demo audit" : embeddedMode === "live" ? "Live result loaded" : "Live mode ready"}</span>
@@ -157,32 +226,37 @@ export function renderStudioPage(result: StudioResult, options: StudioPageOption
 
 <main class="wrap">
   <section id="live-view"${initialView === "live" ? "" : " hidden"}>
-    <h2>Live audit</h2>
-    <label class="input-label" for="intext">Text to verify</label>
-    <textarea id="intext" placeholder="Paste an AI-written report, article, or draft, then Verify."></textarea>
-    <div class="inputctl">
-      <fieldset class="modes"><legend>Audit depth</legend>
-        <label><input type="radio" name="mode" value="quick"> Quick</label>
-        <label><input type="radio" name="mode" value="deep" checked> Deep</label>
-        <label><input type="radio" name="mode" value="high_stakes"> High-Stakes</label>
-      </fieldset>
-      <button type="button" id="run" class="btn btn-run">Verify</button>
+    <div class="live-intro">
+      <h1>Verify before you publish.</h1>
+      <p>Paste a draft. Saga checks its factual claims against current sources, explains what needs attention, and prepares evidence-backed corrections.</p>
     </div>
-    <div class="live-state">
-      <div class="live-head">
-        <p id="live-status" role="status" aria-live="polite" aria-atomic="true">Ready for a live audit.</p>
-        <div class="live-actions">
-          <button type="button" id="cancel" class="btn btn-danger" hidden>Cancel</button>
-          <button type="button" id="retry" class="btn" hidden>Retry</button>
+    <div class="composer">
+      <label class="input-label" for="intext">Text to verify</label>
+      <textarea id="intext" placeholder="Paste an AI-written report, article, or draft."></textarea>
+      <div class="inputctl">
+        <fieldset class="modes"><legend>Audit depth</legend>
+          <label><input type="radio" name="mode" value="quick"> Quick</label>
+          <label><input type="radio" name="mode" value="deep" checked> Deep</label>
+          <label><input type="radio" name="mode" value="high_stakes"> Most thorough</label>
+        </fieldset>
+        <button type="button" id="run" class="btn btn-run">Check this text</button>
+      </div>
+      <div class="live-state">
+        <div class="live-head">
+          <p id="live-status" role="status" aria-live="polite" aria-atomic="true">Ready for a live audit.</p>
+          <div class="live-actions">
+            <button type="button" id="cancel" class="btn btn-danger" hidden>Cancel</button>
+            <button type="button" id="retry" class="btn" hidden>Retry</button>
+          </div>
+        </div>
+        <div id="live-error" class="live-error" role="alert" aria-live="assertive" hidden></div>
+        <div id="live-events-wrap" class="live-events" hidden>
+          <h2>Audit progress</h2>
+          <ol id="live-events" class="log" aria-label="Persisted live audit events"></ol>
         </div>
       </div>
-      <div id="live-error" class="live-error" role="alert" aria-live="assertive" hidden></div>
-      <div id="live-events-wrap" class="live-events" hidden>
-        <h2>Persisted events</h2>
-        <ol id="live-events" class="log" aria-label="Persisted live audit events"></ol>
-      </div>
+      <p class="note">Live mode uses current web research. If a live audit fails, Saga reports the failure and never swaps in sample results.</p>
     </div>
-    <p class="note">Live mode uses provider-backed research only. A failed live audit remains failed and is never replaced by the demo.</p>
   </section>
 
   <section id="demo-empty" class="empty-view" hidden>
@@ -191,31 +265,83 @@ export function renderStudioPage(result: StudioResult, options: StudioPageOption
   </section>
 
   <div id="result-view"${resultInitiallyVisible ? "" : " hidden"}>
-    <section>
-      <span id="result-kicker" class="result-kicker${embeddedMode === "demo" ? " demo" : ""}">${embeddedMode === "demo" ? "Deterministic demo audit" : "Live audit result"}</span>
-      <h2 id="result-title" tabindex="-1">Trust Passport</h2>
-      <div id="stats" class="stats"></div>
+    <section class="result-hero">
+      <div id="demo-notice" class="demo-notice"${embeddedMode === "demo" ? "" : " hidden"}>
+        <div><b>Demo: fixed fictional example.</b> This sample uses fixed evidence and does not search the live web, so every judge sees the same repeatable result.</div>
+      </div>
+      <div class="hero-grid">
+        <div>
+          <span id="result-kicker" class="result-kicker${embeddedMode === "demo" ? " demo" : ""}">${embeddedMode === "demo" ? "Deterministic demo audit" : "Live audit result"}</span>
+          <p class="summary-label">Audit summary</p>
+          <h1 id="result-title" tabindex="-1">Review required</h1>
+          <p id="result-lead" class="result-lead"></p>
+          <div class="hero-actions">
+            <a class="action primary" href="#review">Review the flagged claims</a>
+            <a class="action" href="#corrected">See corrected draft</a>
+          </div>
+        </div>
+        <div id="stats" class="stats"></div>
+      </div>
+      <div id="breakdown" class="breakdown" aria-label="Claim result breakdown"></div>
+      <div id="insights" class="insights"></div>
       <div id="passport-note" class="note"></div>
     </section>
-    <section>
-      <h2>Audit workspace</h2>
+    <section id="review">
+      <div class="section-head">
+        <div><h2>Review the flagged claims</h2><p>Choose any highlighted sentence to see Saga's finding and the exact evidence used.</p></div>
+        <p>Color is paired with a written result, so every finding remains understandable without relying on color alone.</p>
+      </div>
       <div class="work">
-        <div class="pane"><h3>Submitted document</h3><div id="doc" class="doc"></div></div>
-        <div class="pane"><h3>Selected claim</h3><div id="claim"></div></div>
-        <div class="pane"><h3>Evidence</h3><div id="evidence"></div></div>
+        <div class="pane"><h3>Your document</h3><div id="doc" class="doc"></div></div>
+        <div class="pane">
+          <h3>What Saga found</h3>
+          <div id="claim"></div>
+          <details class="evidence-panel" open>
+            <summary>Sources and exact quotes</summary>
+            <div id="evidence"></div>
+          </details>
+        </div>
       </div>
     </section>
-    <section><h2>Agent Flight Recorder</h2><ol id="flight" class="log"></ol></section>
-    <section><h2>Source lineage</h2><div id="lineage"></div></section>
-    <section><h2>Safety Sentinel</h2><div id="safety"></div></section>
-    <section>
-      <h2>Corrected draft (proposed, you approve)</h2>
+    <section id="corrected" class="draft-section">
+      <div class="section-head">
+        <div><h2>Corrected draft</h2><p>Review each suggested change. Your original text is never overwritten.</p></div>
+        <p>Turn off any change to keep the original wording in the assembled draft.</p>
+      </div>
       <div class="draftgrid">
         <div id="changes"></div>
-        <div><div id="draftout" class="draftout"></div><div class="note">The original is never overwritten. Uncheck a change to keep the original wording.</div></div>
+        <div class="draft-card"><h3>Draft with approved changes</h3><div id="draftout" class="draftout"></div></div>
       </div>
     </section>
-    <section id="receipt-section" hidden><h2>Tamper-evident audit receipt</h2><dl id="receipt" class="receipt"></dl></section>
+    <section class="proof-section">
+      <details class="proof">
+        <summary><span><strong>How Saga checked this</strong><small>Inspect source independence, blocked instructions, audit activity, and the verification receipt.</small></span></summary>
+        <div class="proof-body">
+          <div class="proof-grid">
+            <div class="proof-block">
+              <h3>Source independence</h3>
+              <p class="proof-copy">Saga checks whether several articles actually trace back to the same original source.</p>
+              <div id="lineage"></div>
+            </div>
+            <div class="proof-block">
+              <h3>Blocked source instructions</h3>
+              <p class="proof-copy">Instructions found inside researched pages are treated as untrusted content, never as commands.</p>
+              <div id="safety"></div>
+            </div>
+          </div>
+          <div class="proof-block">
+            <h3>Audit activity</h3>
+            <p class="proof-copy">These are recorded workflow events. Saga does not invent progress messages.</p>
+            <ol id="flight" class="log"></ol>
+          </div>
+          <div id="receipt-section" class="proof-block" hidden>
+            <h3>Verification receipt</h3>
+            <p class="proof-copy">These fingerprints make later changes to the document, result, or corrected draft detectable.</p>
+            <dl id="receipt" class="receipt"></dl>
+          </div>
+        </div>
+      </details>
+    </section>
   </div>
 </main>
 
@@ -229,6 +355,21 @@ const AUDIT_STATUS=${JSON.stringify(AUDIT_STATUS_LABELS)};
 const TERMINAL=new Set(["completed","partially_completed","failed","cancelled"]);
 const WARNING_EVENTS=new Set(["INJECTION_QUARANTINED","SOURCE_REJECTED","CONTRADICTION_FOUND","TEMPORAL_FLAGGED"]);
 const POSITIVE_EVENTS=new Set(["PRIMARY_SOURCE_FOUND","VERDICT_REACHED","AUDIT_COMPLETED"]);
+const EVENT_LABEL={
+  CLAIMS_EXTRACTED:"Claims identified",
+  CLAIM_CLASSIFIED:"Time-sensitive claim identified",
+  CONTRACT_DEFINED:"Evidence requirements set",
+  QUERY_EXECUTED:"Research query completed",
+  SOURCE_ACCEPTED:"Source accepted",
+  SOURCE_REJECTED:"Source not used",
+  PRIMARY_SOURCE_FOUND:"Primary source found",
+  CONTRADICTION_FOUND:"Conflicting evidence found",
+  LINEAGE_GROUP_DETECTED:"Copied coverage detected",
+  INJECTION_QUARANTINED:"Suspicious page instructions ignored",
+  TEMPORAL_FLAGGED:"Out-of-date information found",
+  VERDICT_REACHED:"Finding completed",
+  AUDIT_COMPLETED:"Audit completed"
+};
 
 const liveView=document.getElementById("live-view");
 const resultView=document.getElementById("result-view");
@@ -297,15 +438,40 @@ liveButton.addEventListener("click",()=>setView("live"));
 demoButton.addEventListener("click",()=>setView("demo"));
 
 function stat(label,value,cls){return '<div class="stat '+(cls||"")+'"><div class="num">'+escapeHtml(value)+'</div><div class="lbl">'+escapeHtml(label)+'</div></div>'}
+function plural(value,singular,pluralForm){return value+" "+(value===1?singular:(pluralForm||singular+"s"))}
 function renderPassport(result){
   const p=result.passport;
+  const revisions=Number(p.claimsRequiringRevision||0);
+  document.getElementById("result-title").textContent=revisions
+    ? plural(revisions,"claim")+" need"+(revisions===1?"s":"")+" changes before this draft is ready"
+    : "This draft is ready to publish";
+  const parts=[];
+  if(p.supported)parts.push(plural(p.supported,"supported claim"));
+  if(p.qualified)parts.push(plural(p.qualified,"claim")+" needing context");
+  if(p.contradicted)parts.push(plural(p.contradicted,"claim")+" contradicted by evidence");
+  if(p.disputed)parts.push(plural(p.disputed,"claim")+" with reliable disagreement");
+  if(p.outdated)parts.push(plural(p.outdated,"out-of-date claim"));
+  if(p.insufficient)parts.push(plural(p.insufficient,"claim")+" without enough evidence");
+  if(p.notVerifiable)parts.push(plural(p.notVerifiable,"opinion"));
+  document.getElementById("result-lead").textContent="Saga checked "+plural(p.totalClaims,"claim")+". "+(parts.length?parts.join(", ")+".":"No factual problems were found.");
   document.getElementById("stats").innerHTML=[
-    stat("claims",p.totalClaims),stat("supported",p.supported,"v-ok"),stat("qualified",p.qualified,"v-warn"),
-    stat("contradicted",p.contradicted,"v-bad"),stat("outdated",p.outdated,"v-old"),stat("insufficient",p.insufficient,"v-none"),
-    stat("subjective",p.notVerifiable,"v-subj"),stat("primary sources",p.primarySourceCount),
-    stat("independent origins",p.independentOrigins),stat("need revision",p.claimsRequiringRevision,"v-bad")
+    stat("claims checked",p.totalClaims),stat("suggested changes",p.claimsRequiringRevision,"v-bad"),
+    stat("independent sources used",p.independentOrigins)
   ].join("");
-  document.getElementById("passport-note").textContent="Last verified "+p.lastVerifiedAt+". "+result.lineage.sourceCount+" sources cited, "+result.lineage.independentOrigins+" independent evidence origins.";
+  const chips=[
+    ["Supported",p.supported,"v-ok"],["Needs context",p.qualified,"v-warn"],["Wrong",p.contradicted,"v-bad"],
+    ["Disputed",p.disputed,"v-disp"],["Out of date",p.outdated,"v-old"],["Not enough evidence",p.insufficient,"v-none"],
+    ["Opinion",p.notVerifiable,"v-subj"]
+  ].filter(item=>item[1]>0);
+  document.getElementById("breakdown").innerHTML=chips.map(item=>'<span class="count-chip '+item[2]+'">'+escapeHtml(item[1])+' '+escapeHtml(item[0])+'</span>').join("");
+  const insights=[];
+  if(p.contradicted)insights.push(["Conflicting evidence found",plural(p.contradicted,"claim")+" does not match the validated sources."]);
+  const copied=((result.lineage&&result.lineage.groups)||[]).find(group=>group.sourceIds.length>1);
+  if(copied)insights.push(["Copied coverage detected",plural(copied.sourceIds.length,"source")+" trace"+(copied.sourceIds.length===1?"s":"")+" to one origin."]);
+  if((result.safetyEvents||[]).length)insights.push(["Suspicious instructions blocked",plural(result.safetyEvents.length,"unsafe instruction")+" could not influence the audit."]);
+  if(p.outdated&&insights.length<3)insights.push(["Freshness problem found",plural(p.outdated,"claim")+" is no longer current."]);
+  document.getElementById("insights").innerHTML=insights.slice(0,3).map(item=>'<div class="insight"><b>'+escapeHtml(item[0])+'</b>'+escapeHtml(item[1])+'</div>').join("");
+  document.getElementById("passport-note").textContent="Checked "+p.lastVerifiedAt+" across "+result.lineage.sourceCount+" researched sources. "+p.independentOrigins+" independent origins contributed to the result.";
 }
 function renderDocument(result){
   const audits=[...(result.claimAudits||[])].sort((a,b)=>a.claim.location.start-b.claim.location.start);
@@ -322,7 +488,8 @@ function renderDocument(result){
   html+=escapeHtml(doc.slice(cursor));
   document.getElementById("doc").innerHTML=html;
   document.querySelectorAll(".claim-mark").forEach(button=>button.addEventListener("click",()=>selectClaim(result,button.dataset.id)));
-  if(audits.length) selectClaim(result,audits[0].claim.id);
+  const firstFlagged=audits.find(audit=>!["supported","not_verifiable"].includes(audit.verdict.verdict));
+  if(audits.length) selectClaim(result,(firstFlagged||audits[0]).claim.id);
   else{
     document.getElementById("claim").innerHTML='<div class="dim">No claims were returned.</div>';
     document.getElementById("evidence").innerHTML='<div class="dim">No evidence was returned.</div>';
@@ -334,26 +501,29 @@ function selectClaim(result,id){
     const selected=button.dataset.id===id;button.classList.toggle("sel",selected);button.setAttribute("aria-pressed",String(selected));
   });
   const verdict=audit.verdict,cls=VCLASS[verdict.verdict]||"v-none";
-  let claim='<span class="verdict-badge '+cls+'">'+escapeHtml(LABEL[verdict.verdict]||verdict.verdict)+'</span> <span class="conf">'+escapeHtml(verdict.confidence)+' confidence</span>';
-  claim+='<div class="claimtext">"'+escapeHtml(audit.claim.originalText)+'"</div>';
-  claim+='<div class="kv">type <b>'+escapeHtml(audit.claim.claimType)+'</b> | risk <b>'+escapeHtml(audit.claim.risk)+'</b>'+(audit.claim.timeSensitive?' | <b>time-sensitive</b>':'')+'</div>';
-  claim+='<div class="kv">'+escapeHtml(verdict.rationale)+'</div><div class="kv">independent origins behind support: <b>'+escapeHtml(verdict.independentOrigins)+'</b></div>';
-  if(verdict.temporal&&verdict.temporal.superseded)claim+='<div class="kv">temporal: <b>'+escapeHtml(verdict.temporal.note)+'</b></div>';
-  if(verdict.requiredCorrection)claim+='<div class="correction">Required correction: '+escapeHtml(verdict.requiredCorrection)+'</div>';
+  let claim='<div class="finding-label">Finding for '+escapeHtml(audit.claim.id)+'</div><span class="verdict-badge '+cls+'">'+escapeHtml(LABEL[verdict.verdict]||verdict.verdict)+'</span> <span class="conf">'+escapeHtml(verdict.confidence)+' confidence</span>';
+  claim+='<div class="claimtext">“'+escapeHtml(audit.claim.originalText)+'”</div>';
+  claim+='<div class="reason"><b>Why Saga reached this result</b>'+escapeHtml(verdict.rationale)+'</div>';
+  if(verdict.requiredCorrection)claim+='<div class="correction"><b>Recommended correction</b><br>'+escapeHtml(verdict.requiredCorrection)+'</div>';
+  claim+='<details class="claim-meta"><summary>Technical details</summary>';
+  claim+='<div class="kv">Category: <b>'+escapeHtml(audit.claim.claimType)+'</b><br>Impact if wrong: <b>'+escapeHtml(audit.claim.risk)+'</b>'+(audit.claim.timeSensitive?'<br><b>Time-sensitive</b>':'')+'</div>';
+  claim+='<div class="kv">Independent sources supporting this: <b>'+escapeHtml(verdict.independentOrigins)+'</b></div>';
+  if(verdict.temporal&&verdict.temporal.superseded)claim+='<div class="kv">Update status: <b>'+escapeHtml(verdict.temporal.note)+'</b></div>';
+  claim+='</details>';
   document.getElementById("claim").innerHTML=claim;
   const supporting=(audit.evidence||[]).filter(e=>e.stance==="supports");
   const against=(audit.evidence||[]).filter(e=>e.stance==="contradicts"||e.stance==="qualifies");
   let evidence="";
-  for(const item of supporting)evidence+='<div class="ev"><span class="st">supports</span><span class="src">'+escapeHtml(item.sourceId)+'</span><div class="ex">"'+escapeHtml(item.excerpt)+'"</div></div>';
-  for(const item of against)evidence+='<div class="ev against"><span class="st">'+escapeHtml(item.stance)+'</span><span class="src">'+escapeHtml(item.sourceId)+'</span><div class="ex">"'+escapeHtml(item.excerpt)+'"</div></div>';
+  for(const item of supporting)evidence+='<div class="ev"><span class="st">Supports the claim</span><span class="src">Source '+escapeHtml(item.sourceId)+'</span><div class="ex">“'+escapeHtml(item.excerpt)+'”</div></div>';
+  for(const item of against){const stance=item.stance==="contradicts"?"Conflicts with the claim":"Adds important context";evidence+='<div class="ev against"><span class="st">'+stance+'</span><span class="src">Source '+escapeHtml(item.sourceId)+'</span><div class="ex">“'+escapeHtml(item.excerpt)+'”</div></div>';}
   document.getElementById("evidence").innerHTML=evidence||'<div class="dim">No validated evidence retrieved for this claim.</div>';
 }
 function eventText(event){
-  let text=String(event.type||"recorded event").replace(/_/g," ").toLowerCase();
-  if(event.claimId)text+=" | "+event.claimId;
+  let text=EVENT_LABEL[event.type]||"Audit event recorded";
+  if(event.claimId)text+=" for "+event.claimId;
   const detail=event.detail||{};
-  if(detail.verdict)text+=" | "+detail.verdict;
-  else if(detail.sourceId)text+=" | "+detail.sourceId;
+  if(detail.verdict)text+=": "+(LABEL[detail.verdict]||String(detail.verdict).replace(/_/g," "));
+  else if(detail.sourceId)text+=": source "+detail.sourceId;
   return text;
 }
 function renderEventList(element,events,empty){
@@ -368,16 +538,17 @@ function renderLineage(result){
   const groups=(result.lineage&&result.lineage.groups)||[];
   document.getElementById("lineage").innerHTML=groups.map(group=>{
     const copies=group.sourceIds.filter(id=>id!==group.representativeSourceId).map(id=>'<span class="lnode">'+escapeHtml(id)+'</span>').join("");
-    return '<div class="lgroup"><div class="lorigin"><span class="lnode origin">'+escapeHtml(group.representativeSourceId)+'</span><span class="ltag">origin</span></div><div class="lfan">'+copies+'</div><div class="lnote">'+escapeHtml(group.sourceIds.length)+' sources, 1 independent origin ('+escapeHtml(group.originLabel)+')<br>signals: '+escapeHtml(group.signals.join(", "))+'</div></div>';
+    return '<div class="lgroup"><div class="lorigin"><span class="lnode origin">'+escapeHtml(group.representativeSourceId)+'</span><span class="ltag">original source</span></div><div class="lfan">'+copies+'</div><div class="lnote"><b>'+escapeHtml(group.sourceIds.length)+' pages trace to 1 independent source.</b> Saga linked them through '+escapeHtml(group.signals.join(", "))+'.</div></div>';
   }).join("")||'<div class="dim">No shared-origin clusters detected.</div>';
 }
 function renderSafety(result){
   const events=result.safetyEvents||[];
-  document.getElementById("safety").innerHTML=events.map(event=>'<div class="safe"><span class="stag">'+escapeHtml(event.kind)+' '+escapeHtml(event.action)+'</span><div class="ssrc">source: '+escapeHtml(event.sourceId)+'</div><code>'+escapeHtml(event.excerpt)+'</code></div>').join("")||'<div class="dim">No unsafe content detected.</div>';
+  document.getElementById("safety").innerHTML=events.map(event=>'<div class="safe"><span class="stag">Suspicious page content ignored</span><div class="ssrc">Found in source '+escapeHtml(event.sourceId)+'</div><code>'+escapeHtml(event.excerpt)+'</code></div>').join("")||'<div class="dim">No unsafe page instructions were found.</div>';
 }
 function renderChanges(result){
   const changes=result.correctedDraft.changes||[];
-  document.getElementById("changes").innerHTML=changes.map((change,index)=>'<div class="change" data-i="'+index+'"><div class="chead"><span class="ckind">'+escapeHtml(change.kind)+'</span> <span class="dim">'+escapeHtml(change.claimId)+'</span><label class="toggle"><input type="checkbox" class="approve" data-i="'+index+'" checked> apply</label></div><div class="cnote">'+escapeHtml(change.note)+'</div><div class="cbefore"><s>'+escapeHtml(change.original)+'</s></div><div class="cafter">'+escapeHtml(change.replacement)+'</div></div>').join("")||'<div class="dim">No changes proposed.</div>';
+  const kindLabel={rewrite:"Rewrite",qualify:"Add context",update:"Update",flag:"Flag for review",remove:"Remove"};
+  document.getElementById("changes").innerHTML=changes.map((change,index)=>'<div class="change" data-i="'+index+'"><div class="chead"><span class="ckind">'+escapeHtml(kindLabel[change.kind]||change.kind)+'</span> <span class="dim">'+escapeHtml(change.claimId)+'</span><label class="toggle"><input type="checkbox" class="approve" data-i="'+index+'" checked> Apply change</label></div><div class="cnote">'+escapeHtml(change.note)+'</div><div class="cbefore"><s>'+escapeHtml(change.original)+'</s></div><div class="cafter">'+escapeHtml(change.replacement)+'</div></div>').join("")||'<div class="dim">No changes proposed.</div>';
   document.querySelectorAll(".approve").forEach(box=>box.addEventListener("change",()=>renderDraft(result)));
   renderDraft(result);
 }
@@ -399,13 +570,14 @@ function renderReceipt(result){
   const section=document.getElementById("receipt-section"),receipt=result.receipt;
   if(result.mode!=="live"||!receipt){section.hidden=true;return;}
   section.hidden=false;
-  const fields=[["Final audit hash",receipt.finalAuditHash],["Document hash",receipt.documentHash],["Final draft hash",receipt.finalDraftHash],["Workflow",receipt.workflowVersion],["Model",receipt.modelId],["Search",receipt.searchProvider]];
+  const fields=[["Audit fingerprint",receipt.finalAuditHash],["Original document fingerprint",receipt.documentHash],["Corrected draft fingerprint",receipt.finalDraftHash],["Audit version",receipt.workflowVersion],["Model",receipt.modelId],["Search provider",receipt.searchProvider]];
   document.getElementById("receipt").innerHTML=fields.map(field=>'<div><dt>'+escapeHtml(field[0])+'</dt><dd>'+escapeHtml(field[1])+'</dd></div>').join("");
 }
 function renderAuditResult(result,mode){
   if(!result||result.mode!==mode)return;
   const kicker=document.getElementById("result-kicker");
   kicker.textContent=mode==="demo"?"Deterministic demo audit":"Live audit result";kicker.className="result-kicker"+(mode==="demo"?" demo":"");
+  document.getElementById("demo-notice").hidden=mode!=="demo";
   renderPassport(result);renderDocument(result);renderEventList(document.getElementById("flight"),result.flight||[],"No flight events were recorded.");renderLineage(result);renderSafety(result);renderChanges(result);renderReceipt(result);
 }
 

@@ -38,7 +38,7 @@ Open `http://127.0.0.1:4500/demo`. This is the guest Demo route. No account is r
 ### Act 1: map the risk
 
 The committed Northwind Energy brief contains five claims with different failure modes.
-Start in the submitted-document pane and click each highlighted claim.
+Start in Your document and click each highlighted claim.
 
 Use these exact, fixture-backed talking points:
 
@@ -54,14 +54,15 @@ workflow, not proof of real-world accuracy.
 
 ### Act 2: show adversarial research
 
-Open the selected-claim evidence and the Agent Flight Recorder.
+Open Sources and exact quotes for the selected claim, then expand How Saga checked this.
 
-For the lifespan claim, point to the Safety Sentinel entry. The hostile page asks the
+For the lifespan claim, point to Blocked source instructions. The hostile page asks the
 auditor to trust it and record the false 40-year claim. Saga treats the page as data,
 quarantines the instruction-like text, and does not use it as supporting evidence.
 
-For the market-leader claim, open Source lineage. An apparent five-source cluster traces
-to one company release. The Trust Passport counts independent origins, not article count.
+For the market-leader claim, open Source independence. An apparent five-source cluster
+traces to one company release. The Audit summary counts independent sources, not article
+count.
 
 Keep the safety claim precise. Saga uses sanitization, read-only tools, schema validation,
 and human approval as defense in depth. It is not a proof against every novel injection.
@@ -69,8 +70,8 @@ and human approval as defense in depth. It is not a proof against every novel in
 ### Act 3: show the usable result
 
 Open the corrected draft. The original stays unchanged, and each proposed change can be
-unchecked. Then point to the Trust Passport and its claim counts, primary-source count,
-independent-origin count, and revision status.
+unchecked. Then point to the Audit summary and its claim count, suggested-change count,
+independent-source count, and plain-language result.
 
 The Demo flight events are deterministic events from the fixture pipeline. They are not
 animations or fabricated progress. The Live workspace follows the same rule and displays
@@ -104,7 +105,8 @@ What the browser does:
 2. The local worker maps claims and runs the provider-backed workflow.
 3. The page polls `GET /api/audits/:id` every 750 ms.
 4. Persisted stage changes and real flight events appear as they are recorded.
-5. A completed or partial result shows the corrected draft, Trust Passport, and receipt.
+5. A completed or partial result shows the corrected draft, Audit summary, and
+   Verification receipt.
 6. The audit ID remains in the URL, so refresh reloads the SQLite record.
 
 This is polling, not Server-Sent Events. Do not describe it as streaming.
@@ -149,7 +151,7 @@ Run this twice, back to back:
 4. The five claim highlights are selectable.
 5. The injection quarantine and lineage cluster are visible.
 6. The corrected draft toggles preserve the original.
-7. The Trust Passport is visible and clearly labeled Demo.
+7. The Audit summary is visible and clearly labeled Demo.
 8. If Live providers are configured, the rehearsed Live input reaches a terminal state.
 9. Refreshing that Live audit reloads its persisted state.
 10. If Live providers are not configured, the presenter says so and does not claim a

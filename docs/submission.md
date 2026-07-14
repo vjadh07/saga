@@ -6,7 +6,7 @@
 
 **Tagline:** Trust, with receipts.
 
-**Short description:** Saga is an adversarial evidence-auditing agent for AI-written text. It researches each factual claim, checks citations, sources, dates, lineage, and arithmetic, then returns corrected prose, a Trust Passport, and a tamper-evident receipt.
+**Short description:** Saga is an adversarial evidence-auditing agent for AI-written text. It researches each factual claim, checks citations, sources, dates, lineage, and arithmetic, then returns corrected prose, a plain-language audit summary, and a tamper-evident receipt.
 
 **Repository:** https://github.com/vjadh07/saga
 
@@ -20,7 +20,7 @@ AI can produce polished prose faster than people can verify it. A fluent report 
 
 Saga turns a document into an auditable research workflow. It maps atomic claims, defines an evidence contract, plans separate supporting and skeptical research, retrieves public pages through an SSRF-hardened fetcher, quarantines instruction-like source text, validates exact excerpts, assesses source quality, collapses shared lineage, checks time-sensitive claims, and recomputes numerical relationships in deterministic code.
 
-The Arbiter receives only validated evidence and evaluated contract results. It cannot browse or invent citations. The Revision Agent must ground corrected prose in accepted evidence or a verified numerical trace. Saga preserves the original document and produces a corrected draft, a document-level Trust Passport, an Agent Flight Recorder made from real workflow events, and a canonical tamper-evident receipt.
+The Arbiter receives only validated evidence and evaluated contract results. It cannot browse or invent citations. The Revision Agent must ground corrected prose in accepted evidence or a verified numerical trace. Saga preserves the original document and produces a corrected draft, a plain-language audit summary, an activity log made from real workflow events, and a canonical tamper-evident receipt.
 
 Live and Demo modes are deliberately separate. Live accepts arbitrary text and uses provider-backed research. Demo is a deterministic, clearly labeled fallback for judging. A failed Live audit remains failed or partial and never consumes Demo labels or silently changes modes. The guest Studio needs no account.
 
@@ -57,7 +57,7 @@ For Live mode, add `BRAVE_SEARCH_API_KEY` to `.env`, use a logged-in local Claud
 - citation, source-quality, lineage, temporal, and deterministic numerical verification
 - contradiction resolution and evidence-contract enforcement
 - evidence-grounded corrected prose
-- Trust Passport, real flight events, and tamper-evident audit receipt
+- plain-language audit summary, real workflow events, and tamper-evident audit receipt
 - durable local SQLite audits with refresh recovery, cancel, retry, limits, timeouts, and partial claim failure
 - separate one-click deterministic guest Demo
 - deterministic mock-provider integration and hidden-label orchestration checks
@@ -87,6 +87,7 @@ For Live mode, add `BRAVE_SEARCH_API_KEY` to `.env`, use a logged-in local Claud
 - [ ] Add the repository link.
 - [ ] Add the final hosted URL if one is deployed.
 - [ ] Record a short video using the primary runbook in `docs/demo.md`.
-- [ ] Show the explicit Demo badge, one corrected claim, source lineage, the Safety Sentinel, Trust Passport, and audit receipt.
+- [ ] Show the explicit Demo badge, one corrected claim, source independence, blocked source instructions, and the Audit summary.
+- [ ] If you include a rehearsed Live audit, show its Verification receipt.
 - [ ] Do not describe polling as streaming or the deterministic mock evaluation as a benchmark.
 - [ ] Do not claim an external Live smoke result unless it was actually observed.

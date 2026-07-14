@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { MockModelProvider } from "../src/verify/providers/model.js";
-import { validateEvidence, type EvidenceCandidate } from "../src/verify/research/citation.js";
+import { isCitationValidatedEvidence, validateEvidence } from "../src/verify/research/citation.js";
 import type { Claim, Evidence, Source } from "../src/verify/types.js";
 
 const claim: Claim = {
@@ -35,6 +35,50 @@ test("direct support with all facets matching is validated as strong support", a
   expect(r.validated[0]!.relevance).toBe("strong");
   expect(r.validated[0]!.citationAssessment!.relation).toBe("direct_support");
   expect(r.validated[0]!.citationAssessment!.exactMatchVerified).toBe(true);
+  expect(r.validated[0]!.citationAssessment).toMatchObject({
+    sameEntity: true,
+    sameMetric: true,
+    samePeriod: true,
+    samePopulation: true,
+  });
+  expect(isCitationValidatedEvidence(r.validated[0]!)).toBe(true);
+});
+
+test("an entity or metric mismatch cannot be accepted as evidence", async () => {
+  const s = source("s1", "Testing confirms a different product lasts 40 years.");
+  const entityModel = new MockModelProvider({ citation_assessment: [{ ...checks({ sameEntity: false }), relation: "direct_support", explanation: "wrong product" }] });
+  const entity = await validateEvidence({ claim, candidates: [{ evidence: ev("s1", "a different product lasts 40 years"), source: s }], model: entityModel });
+  expect(entity.validated).toHaveLength(0);
+
+  const metricModel = new MockModelProvider({ citation_assessment: [{ ...checks({ sameMetric: false }), relation: "direct_support", explanation: "wrong measure" }] });
+  const metric = await validateEvidence({ claim, candidates: [{ evidence: ev("s1", "a different product lasts 40 years"), source: s }], model: metricModel });
+  expect(metric.validated).toHaveLength(0);
+});
+
+test("period or population mismatch cannot remain direct support or contradiction", async () => {
+  const s = source("s1", "Testing confirms the batteries last 40 years in one laboratory population.");
+  const periodModel = new MockModelProvider({ citation_assessment: [{ ...checks({ samePeriod: false }), relation: "direct_support", explanation: "different period" }] });
+  const period = await validateEvidence({ claim, candidates: [{ evidence: ev("s1", "the batteries last 40 years in one laboratory population"), source: s }], model: periodModel });
+  expect(period.validated[0]!.stance).toBe("qualifies");
+  expect(period.validated[0]!.citationAssessment!.relation).toBe("qualification");
+
+  const populationModel = new MockModelProvider({ citation_assessment: [{ ...checks({ samePopulation: false }), relation: "direct_contradiction", explanation: "different population" }] });
+  const population = await validateEvidence({ claim, candidates: [{ evidence: ev("s1", "the batteries last 40 years in one laboratory population", "contradicts"), source: s }], model: populationModel });
+  expect(population.validated).toHaveLength(0);
+});
+
+test("bare evidence without citation validation is not citation-validated", () => {
+  expect(isCitationValidatedEvidence(ev("s1", "the batteries last 40 years"))).toBe(false);
+});
+
+test("a candidate must be bound to the claim and source being validated", async () => {
+  const s = source("s1", "the batteries last 40 years in testing");
+  const wrongClaim = ev("s1", "the batteries last 40 years");
+  wrongClaim.claimId = "other";
+  const wrongSource = ev("other", "the batteries last 40 years");
+  const r = await validateEvidence({ claim, candidates: [{ evidence: wrongClaim, source: s }, { evidence: wrongSource, source: s }], model: new MockModelProvider({}) });
+  expect(r.validated).toHaveLength(0);
+  expect(r.rejected).toHaveLength(2);
 });
 
 test("a claim stronger than the source is downgraded to partial support", async () => {
@@ -66,6 +110,17 @@ test("an excerpt that is not verbatim in the source is rejected regardless of th
   const r = await validateEvidence({ claim, candidates: [{ evidence: ev("s1", "the batteries last 40 years"), source: s }], model });
   expect(r.validated).toHaveLength(0);
   expect(r.rejected[0]!.reason).toMatch(/verbatim|not found|exact/i);
+});
+
+test("verbatim matching preserves numeric signs", async () => {
+  const s = source("s1", "The measured change was -40 percent in 2025.");
+  const r = await validateEvidence({
+    claim,
+    candidates: [{ evidence: ev("s1", "the measured change was 40 percent in 2025"), source: s }],
+    model: new MockModelProvider({}),
+  });
+  expect(r.validated).toHaveLength(0);
+  expect(r.rejected[0]!.reason).toMatch(/verbatim|exact/i);
 });
 
 test("direct contradiction is validated as a contradiction", async () => {

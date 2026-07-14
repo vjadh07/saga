@@ -188,7 +188,7 @@ function dedupeSources(sources: Source[]): Source[] {
 }
 
 function emptyContractEval(claimId: string): ContractEvaluation {
-  return { claimId, supportingCriteriaMet: false, contradictingCriteriaMet: false, primaryRequirementMet: false, independentOriginRequirementMet: false, triggeredAbstentionConditions: ["no evidence was retrieved"], explanation: "no evidence" };
+  return { claimId, supportingCriteriaMet: false, contradictingCriteriaMet: false, primaryRequirementMet: false, preferredSourceRequirementMet: false, independentOriginRequirementMet: false, temporalRequirementMet: true, triggeredAbstentionConditions: ["no evidence was retrieved"], explanation: "no evidence" };
 }
 
 function baseAudit(

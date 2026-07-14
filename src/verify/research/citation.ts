@@ -6,7 +6,6 @@
 // support becomes partial; if qualifiers were omitted, support becomes a qualification.
 // Only validated evidence leaves this file.
 import { z } from "zod";
-import { normalizeText } from "../text.js";
 import type { ModelProvider } from "../providers/model.js";
 import type { CitationRelation, Claim, Evidence, Relevance, Source, Stance } from "../types.js";
 
@@ -36,13 +35,27 @@ Decide each: sameEntity, sameMetric, samePeriod, samePopulation (does the excerp
 Then choose relation: direct_support, partial_support, qualification, direct_contradiction, context_only, or irrelevant.`;
 
 function isVerbatim(excerpt: string, content: string): boolean {
-  const e = normalizeText(excerpt);
-  return e.split(" ").length >= 4 && normalizeText(content).includes(e);
+  const normalizeVerbatim = (value: string): string => value
+    .normalize("NFKC")
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[‐‑‒–—−]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase("en-US");
+  const e = normalizeVerbatim(excerpt);
+  const tokens = e.match(/[\p{L}\p{N}]+/gu) ?? [];
+  return tokens.length >= 4 && normalizeVerbatim(content).includes(e);
 }
 
 // deterministic downgrades applied on top of the model's relation
 function adjustRelation(relation: CitationRelation, a: z.infer<typeof AssessSchema>): CitationRelation {
   let r = relation;
+  if (!a.sameEntity || !a.sameMetric) return "irrelevant";
+  if (!a.samePeriod || !a.samePopulation) {
+    if (r === "direct_support" || r === "partial_support") return "qualification";
+    if (r === "direct_contradiction") return "context_only";
+  }
   if (r === "direct_support" && a.claimStrongerThanSource) r = "partial_support";
   if ((r === "direct_support" || r === "partial_support") && a.qualifiersOmitted) r = "qualification";
   return r;
@@ -63,11 +76,31 @@ function relationToStance(relation: CitationRelation): { stance: Stance; relevan
   }
 }
 
+export function isCitationValidatedEvidence(evidence: Evidence): boolean {
+  const assessment = evidence.citationAssessment;
+  if (!assessment?.exactMatchVerified) return false;
+  if (!assessment.sameEntity || !assessment.sameMetric) return false;
+  if (["direct_support", "partial_support", "direct_contradiction"].includes(assessment.relation)
+      && (!assessment.samePeriod || !assessment.samePopulation)) return false;
+  if (assessment.relation === "direct_support" && (assessment.claimStrongerThanSource || assessment.qualifiersOmitted)) return false;
+  if (assessment.relation === "partial_support" && assessment.qualifiersOmitted) return false;
+  const mapped = relationToStance(assessment.relation);
+  return mapped !== null && mapped.stance === evidence.stance && mapped.relevance === evidence.relevance;
+}
+
 export async function validateEvidence(input: { claim: Claim; candidates: EvidenceCandidate[]; model: ModelProvider }): Promise<ValidateResult> {
   const { claim, candidates, model } = input;
   const result: ValidateResult = { validated: [], rejected: [] };
 
   for (const { evidence, source } of candidates) {
+    if (evidence.claimId !== claim.id) {
+      result.rejected.push({ evidence, reason: "evidence belongs to a different claim" });
+      continue;
+    }
+    if (evidence.sourceId !== source.id) {
+      result.rejected.push({ evidence, reason: "evidence source id does not match the source being validated" });
+      continue;
+    }
     if (!isVerbatim(evidence.excerpt, source.content)) {
       result.rejected.push({ evidence, reason: "excerpt not found verbatim in the sanitized source (exact match failed)" });
       continue;
@@ -82,7 +115,17 @@ export async function validateEvidence(input: { claim: Claim; candidates: Eviden
 
     const relation = adjustRelation(a.relation, a);
     const mapped = relationToStance(relation);
-    const citationAssessment = { relation, explanation: a.explanation, exactMatchVerified: true };
+    const citationAssessment = {
+      relation,
+      explanation: a.explanation,
+      exactMatchVerified: true,
+      sameEntity: a.sameEntity,
+      sameMetric: a.sameMetric,
+      samePeriod: a.samePeriod,
+      samePopulation: a.samePopulation,
+      claimStrongerThanSource: a.claimStrongerThanSource,
+      qualifiersOmitted: a.qualifiersOmitted,
+    };
 
     if (!mapped) {
       result.rejected.push({ evidence: { ...evidence, citationAssessment }, reason: `relation ${relation}: not usable as evidence` });

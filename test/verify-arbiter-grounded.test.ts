@@ -6,12 +6,13 @@ const claim = { id: "c1", verifiable: true, timeSensitive: false };
 const noTemporal: TemporalAssessment = { scope: "undated", claimAsOf: null, latestEvidenceAt: null, superseded: false, note: "" };
 const noConflict: ConflictAnalysis = { claimId: "c1", hasConflict: false, cause: "none", reconciled: false, explanation: "" };
 function contractEval(over: Partial<ContractEvaluation> = {}): ContractEvaluation {
-  return { claimId: "c1", supportingCriteriaMet: true, contradictingCriteriaMet: false, primaryRequirementMet: true, independentOriginRequirementMet: true, triggeredAbstentionConditions: [], explanation: "", ...over };
+  return { claimId: "c1", supportingCriteriaMet: true, contradictingCriteriaMet: false, primaryRequirementMet: true, preferredSourceRequirementMet: true, independentOriginRequirementMet: true, temporalRequirementMet: true, triggeredAbstentionConditions: [], explanation: "", ...over };
 }
 let n = 0;
-function ev(stance: Evidence["stance"]): Evidence {
+function ev(stance: Evidence["stance"], relevance: Evidence["relevance"] = "strong"): Evidence {
   n++;
-  return { id: `e${n}`, claimId: "c1", sourceId: `s${n}`, stance, excerpt: "x", relevance: "strong", capturedBy: stance === "supports" ? "investigator" : "skeptic" };
+  const relation = stance === "supports" ? (relevance === "strong" ? "direct_support" : "partial_support") : stance === "contradicts" ? "direct_contradiction" : "qualification";
+  return { id: `e${n}`, claimId: "c1", sourceId: `s${n}`, stance, excerpt: "x", relevance, capturedBy: stance === "supports" ? "investigator" : "skeptic", citationAssessment: { relation, explanation: "validated", exactMatchVerified: true, sameEntity: true, sameMetric: true, samePeriod: true, samePopulation: true, claimStrongerThanSource: relevance === "weak", qualifiersOmitted: false } };
 }
 const base = { claim, contractEvaluation: contractEval(), temporal: noTemporal, numeric: null as NumericCheck | null, conflict: noConflict, supportOrigins: 2, contraOrigins: 0 };
 
@@ -50,20 +51,131 @@ test("no evidence abstains as insufficient", () => {
   expect(v.verdict).toBe("insufficient_evidence");
 });
 
+test("bare or relation-inconsistent evidence cannot reach an Arbiter verdict", () => {
+  const bare = ev("supports");
+  delete bare.citationAssessment;
+  const bareVerdict = groundedArbitrate({ ...base, evidence: [bare] });
+  expect(bareVerdict.verdict).toBe("insufficient_evidence");
+  expect(bareVerdict.supporting).toEqual([]);
+
+  const inconsistent = ev("supports");
+  inconsistent.citationAssessment = { relation: "direct_contradiction", explanation: "mismatch", exactMatchVerified: true, sameEntity: true, sameMetric: true, samePeriod: true, samePopulation: true, claimStrongerThanSource: false, qualifiersOmitted: false };
+  const inconsistentVerdict = groundedArbitrate({ ...base, evidence: [inconsistent] });
+  expect(inconsistentVerdict.verdict).toBe("insufficient_evidence");
+});
+
+test("contract result flags gate otherwise validated evidence", () => {
+  const support = groundedArbitrate({ ...base, evidence: [ev("supports")], contractEvaluation: contractEval({ supportingCriteriaMet: false }) });
+  expect(support.verdict).toBe("insufficient_evidence");
+  const contra = groundedArbitrate({ ...base, evidence: [ev("contradicts")], contractEvaluation: contractEval({ contradictingCriteriaMet: false }) });
+  expect(contra.verdict).toBe("insufficient_evidence");
+});
+
+test("primary and independent-origin contract failures qualify support even if the explanation list is inconsistent", () => {
+  const primary = groundedArbitrate({ ...base, evidence: [ev("supports")], contractEvaluation: contractEval({ primaryRequirementMet: false }) });
+  expect(primary.verdict).toBe("supported_with_qualifications");
+  const origins = groundedArbitrate({ ...base, evidence: [ev("supports")], contractEvaluation: contractEval({ independentOriginRequirementMet: false }) });
+  expect(origins.verdict).toBe("supported_with_qualifications");
+});
+
+test("contract-ineligible support cannot turn a supported contradiction into a dispute", () => {
+  const contractEvaluation = contractEval({
+    contradictingCriteriaMet: true,
+    primaryRequirementMet: false,
+    triggeredAbstentionConditions: ["a primary source is required but none was accepted"],
+  });
+  const v = groundedArbitrate({
+    ...base,
+    contractEvaluation,
+    evidence: [ev("supports"), ev("contradicts")],
+    contraOrigins: 1,
+    conflict: { claimId: "c1", hasConflict: true, cause: "genuine_dispute", reconciled: false, explanation: "same question" },
+  });
+  expect(v.verdict).toBe("contradicted");
+});
+
+test("weak partial support cannot outweigh a strong direct contradiction", () => {
+  const v = groundedArbitrate({
+    ...base,
+    contractEvaluation: contractEval({ contradictingCriteriaMet: true }),
+    evidence: [ev("supports", "weak"), ev("contradicts")],
+    supportOrigins: 1,
+    contraOrigins: 1,
+  });
+  expect(v.verdict).toBe("contradicted");
+});
+
+test("weak partial support alone is qualified rather than clean support", () => {
+  const v = groundedArbitrate({ ...base, evidence: [ev("supports", "weak")], supportOrigins: 1 });
+  expect(v.verdict).toBe("supported_with_qualifications");
+});
+
+test("conflict metadata must belong to this claim and describe a real conflict", () => {
+  const contractEvaluation = contractEval({ contradictingCriteriaMet: true });
+  const evidence = [ev("supports"), ev("contradicts")];
+  const foreign = groundedArbitrate({ ...base, contractEvaluation, evidence, contraOrigins: 1, conflict: { claimId: "other", hasConflict: true, cause: "different_region", reconciled: true, explanation: "other claim" } });
+  expect(foreign.verdict).toBe("disputed");
+  const absent = groundedArbitrate({ ...base, contractEvaluation, evidence, contraOrigins: 1, conflict: { claimId: "c1", hasConflict: false, cause: "different_region", reconciled: true, explanation: "not analyzed" } });
+  expect(absent.verdict).toBe("disputed");
+});
+
+test("evidence and numeric checks from another claim are ignored", () => {
+  const foreignEvidence = ev("supports");
+  foreignEvidence.claimId = "other";
+  expect(groundedArbitrate({ ...base, evidence: [foreignEvidence] }).verdict).toBe("insufficient_evidence");
+
+  const numeric: NumericCheck = { claimId: "other", kind: "percent_change", expression: "", inputs: {}, computedResult: 25, claimedResult: 40, matches: false, explanation: "", grounded: true, groundingIssues: [], sourceEvidenceIds: [] };
+  expect(groundedArbitrate({ ...base, evidence: [], numeric }).verdict).toBe("insufficient_evidence");
+});
+
 test("a genuine dispute is disputed; a reconciled conflict is qualified", () => {
-  const disputed = groundedArbitrate({ ...base, evidence: [ev("supports"), ev("contradicts")], contraOrigins: 1, conflict: { claimId: "c1", hasConflict: true, cause: "genuine_dispute", reconciled: false, explanation: "" } });
+  const contractEvaluation = contractEval({ contradictingCriteriaMet: true });
+  const disputed = groundedArbitrate({ ...base, contractEvaluation, evidence: [ev("supports"), ev("contradicts")], contraOrigins: 1, conflict: { claimId: "c1", hasConflict: true, cause: "genuine_dispute", reconciled: false, explanation: "" } });
   expect(disputed.verdict).toBe("disputed");
-  const reconciled = groundedArbitrate({ ...base, evidence: [ev("supports"), ev("contradicts")], contraOrigins: 1, conflict: { claimId: "c1", hasConflict: true, cause: "different_region", reconciled: true, explanation: "" } });
+  const reconciled = groundedArbitrate({ ...base, contractEvaluation, evidence: [ev("supports"), ev("contradicts")], contraOrigins: 1, conflict: { claimId: "c1", hasConflict: true, cause: "different_region", reconciled: true, explanation: "" } });
   expect(reconciled.verdict).toBe("supported_with_qualifications");
 });
 
 test("a superseded current claim is outdated", () => {
   const temporal: TemporalAssessment = { scope: "current", claimAsOf: null, latestEvidenceAt: null, superseded: true, note: "no longer current" };
-  const v = groundedArbitrate({ ...base, evidence: [ev("supports"), ev("contradicts")], contraOrigins: 1, temporal });
+  const v = groundedArbitrate({ ...base, contractEvaluation: contractEval({ contradictingCriteriaMet: true, temporalRequirementMet: false }), evidence: [ev("supports"), ev("contradicts")], contraOrigins: 1, temporal });
   expect(v.verdict).toBe("outdated");
 });
 
+test("a stale-evidence contract result preserves valid historical support for an outdated verdict", () => {
+  const temporal: TemporalAssessment = { scope: "current", claimAsOf: null, latestEvidenceAt: null, superseded: true, note: "newer evidence supersedes the claim" };
+  const v = groundedArbitrate({
+    ...base,
+    contractEvaluation: contractEval({
+      contradictingCriteriaMet: true,
+      temporalRequirementMet: false,
+      triggeredAbstentionConditions: ["the newest supporting evidence predates the period the claim refers to"],
+    }),
+    evidence: [ev("supports"), ev("contradicts")],
+    contraOrigins: 1,
+    temporal,
+  });
+  expect(v.verdict).toBe("outdated");
+});
+
+test("weak historical support cannot establish an outdated verdict", () => {
+  const temporal: TemporalAssessment = { scope: "current", claimAsOf: null, latestEvidenceAt: null, superseded: true, note: "newer evidence supersedes the claim" };
+  const v = groundedArbitrate({
+    ...base,
+    contractEvaluation: contractEval({
+      contradictingCriteriaMet: true,
+      temporalRequirementMet: false,
+      triggeredAbstentionConditions: ["the newest supporting evidence predates the period the claim refers to"],
+    }),
+    evidence: [ev("supports", "weak"), ev("contradicts")],
+    supportOrigins: 1,
+    contraOrigins: 1,
+    temporal,
+  });
+  expect(v.verdict).toBe("contradicted");
+});
+
 test("every verdict cites only accepted evidence ids", () => {
-  const v = groundedArbitrate({ ...base, evidence: [ev("supports"), ev("contradicts")], contraOrigins: 1 });
+  const v = groundedArbitrate({ ...base, contractEvaluation: contractEval({ contradictingCriteriaMet: true }), evidence: [ev("supports"), ev("contradicts")], contraOrigins: 1 });
   for (const id of [...v.supporting, ...v.contradicting]) expect(id).toMatch(/^e\d+$/);
 });

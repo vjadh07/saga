@@ -78,7 +78,9 @@ export interface ContractEvaluation {
   supportingCriteriaMet: boolean;
   contradictingCriteriaMet: boolean;
   primaryRequirementMet: boolean;
+  preferredSourceRequirementMet: boolean;
   independentOriginRequirementMet: boolean;
+  temporalRequirementMet: boolean;
   triggeredAbstentionConditions: string[];
   explanation: string;
 }
@@ -118,6 +120,12 @@ export interface CitationAssessment {
   relation: CitationRelation;
   explanation: string;
   exactMatchVerified: boolean; // the excerpt was located verbatim in the sanitized source
+  sameEntity: boolean;
+  sameMetric: boolean;
+  samePeriod: boolean;
+  samePopulation: boolean;
+  claimStrongerThanSource: boolean;
+  qualifiersOmitted: boolean;
 }
 
 export interface Evidence {

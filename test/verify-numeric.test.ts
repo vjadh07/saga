@@ -274,7 +274,7 @@ test("numeric inputs may be grounded in validated evidence", async () => {
   };
   const evidence: Evidence[] = [{
     id: "e1", claimId: "c1", sourceId: "s1", stance: "supports", excerpt: "Revenue rose from 80 million dollars to 100 million dollars.", relevance: "strong", capturedBy: "investigator",
-    citationAssessment: { relation: "direct_support", explanation: "same figures", exactMatchVerified: true },
+    citationAssessment: { relation: "direct_support", explanation: "same figures", exactMatchVerified: true, sameEntity: true, sameMetric: true, samePeriod: true, samePopulation: true, claimStrongerThanSource: false, qualifiersOmitted: false },
   }];
   const model = new MockModelProvider({
     numeric_extract: [{ kind: "percent_change", inputs: { from: 80, to: 100 }, claimedResult: 25, explanation: "revenue growth" }],

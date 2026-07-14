@@ -151,7 +151,7 @@ function failedClaimAudit(claim: Claim, message: string): LiveClaimAudit {
     evidence: [],
     sourceQuality: [],
     sourcesExamined: [],
-    contractEvaluation: { claimId: claim.id, supportingCriteriaMet: false, contradictingCriteriaMet: false, primaryRequirementMet: false, independentOriginRequirementMet: false, triggeredAbstentionConditions: [message], explanation: message },
+    contractEvaluation: { claimId: claim.id, supportingCriteriaMet: false, contradictingCriteriaMet: false, primaryRequirementMet: false, preferredSourceRequirementMet: false, independentOriginRequirementMet: false, temporalRequirementMet: true, triggeredAbstentionConditions: [message], explanation: message },
     temporal: { scope: "undated", claimAsOf: null, latestEvidenceAt: null, superseded: false, note: "" },
     numeric: null,
     conflict: { claimId: claim.id, hasConflict: false, cause: "none", reconciled: false, explanation: "" },

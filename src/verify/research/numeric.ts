@@ -3,6 +3,7 @@
 // This catches the classic error where prose asserts one figure ("a 40% increase") while
 // the underlying numbers imply another (25%).
 import { z } from "zod";
+import { isCitationValidatedEvidence } from "./citation.js";
 import type { Claim, Evidence, NumericCheck, NumericKind } from "../types.js";
 import type { ModelProvider } from "../providers/model.js";
 
@@ -364,7 +365,7 @@ function resultRoleVerified(kind: NumericKind, claimedResult: number | null, tex
 }
 
 export async function verifyNumericClaim(input: { claim: Claim; evidence: Evidence[]; model: ModelProvider }): Promise<NumericCheck | null> {
-  const validatedEvidence = input.evidence.filter((e) => e.citationAssessment?.exactMatchVerified === true);
+  const validatedEvidence = input.evidence.filter((e) => e.claimId === input.claim.id && isCitationValidatedEvidence(e));
   const relation = await input.model.generateStructured({
     purpose: "numeric_extract",
     system: PROMPT,

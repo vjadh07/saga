@@ -4,10 +4,13 @@ import { FixtureSearchProvider } from "../src/verify/providers/search.js";
 import { FixturePageFetcher } from "../src/verify/providers/fetch.js";
 import { runLiveAudit } from "../src/verify/live/audit.js";
 import { verifyReceipt } from "../src/verify/receipt.js";
+import { hashId } from "../src/verify/text.js";
 import type { Claim } from "../src/verify/types.js";
 
 const NOW = "2026-07-13T00:00:00.000Z";
 const DOC = "Revenue grew from $80M to $100M, a 40% increase.";
+const FILING_SOURCE_ID = hashId("src", "https://gov.example/filing");
+const FILING_EVIDENCE_ID = hashId("ev", "c1", FILING_SOURCE_ID, "supports");
 const claim: Claim = {
   id: "c1", originalText: DOC, normalized: DOC.toLowerCase(), claimType: "numeric",
   location: { start: 0, end: DOC.length }, verifiable: true, timeSensitive: false, risk: "high", status: "contracted", asOf: null,
@@ -28,7 +31,7 @@ function providers() {
       { sameEntity: true, sameMetric: true, samePeriod: true, samePopulation: true, claimStrongerThanSource: false, qualifiersOmitted: false, relation: "direct_support", explanation: "matches the figures" },
     ],
     numeric_extract: [{ kind: "percent_change", inputs: { from: 80, to: 100 }, claimedResult: 40, explanation: "revenue growth" }],
-    revision: [{ replacement: "Revenue grew from $80M to $100M.", citationEvidenceIds: [], reasoning: "drop the false 40%" }],
+    revision: [{ replacement: "Revenue grew from $80M to $100M.", citationEvidenceIds: [FILING_EVIDENCE_ID] }],
   });
   const search = new FixtureSearchProvider({
     "revenue growth filing": [
@@ -73,6 +76,8 @@ test("arbitrary text flows through the full live audit: research, injection, cit
   expect(r.correctedDraft.original).toBe(DOC);
   expect(r.correctedDraft.draft).not.toBe(DOC);
   expect(r.correctedDraft.changes[0]!.source).toBe("revision_agent");
+  expect(r.correctedDraft.changes[0]!.citations).toEqual([FILING_EVIDENCE_ID]);
+  expect(r.correctedDraft.draft).not.toMatch(/\[(?:update|removed|qualify|unverified)/i);
 
   // trust passport and a tamper-evident receipt
   expect(r.passport.documentStatus).toBe("materially_contradicted");
@@ -98,4 +103,7 @@ test("a claim whose research fails is isolated as failed, not contradicted", asy
   const fetcher = new FixturePageFetcher({});
   const r = await runLiveAudit({ auditId: "aud2", document: DOC, claims: [claim], mode: "quick", model, search, fetcher, now: NOW });
   expect(r.claimAudits[0]!.verdict.verdict).toBe("failed");
+  expect(r.correctedDraft.changes).toHaveLength(1);
+  expect(r.correctedDraft.changes[0]!.source).toBe("deterministic_revision");
+  expect(r.correctedDraft.changes[0]!.replacement).toBe("");
 });

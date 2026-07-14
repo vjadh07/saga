@@ -100,7 +100,7 @@ export async function runLiveAudit(input: LiveAuditInput): Promise<LiveAuditResu
   // corrected draft through the Revision Agent, applied at claim offsets (original preserved)
   const changes: DraftChange[] = [];
   for (const a of claimAudits) {
-    const change = await reviseChange({ claim: a.claim, verdict: a.verdict, evidence: a.evidence, model }).catch(() => null);
+    const change = await reviseChange({ claim: a.claim, verdict: a.verdict, evidence: a.evidence, numeric: a.numeric, model });
     if (change) changes.push(change);
   }
   const correctedDraft = assembleDraft(document, claims, changes);
@@ -155,7 +155,7 @@ function failedClaimAudit(claim: Claim, message: string): LiveClaimAudit {
     temporal: { scope: "undated", claimAsOf: null, latestEvidenceAt: null, superseded: false, note: "" },
     numeric: null,
     conflict: { claimId: claim.id, hasConflict: false, cause: "none", reconciled: false, explanation: "" },
-    verdict: { claimId: claim.id, verdict: "failed", confidence: "low", rationale: message, supporting: [], contradicting: [], independentOrigins: 0, temporal: null, requiredCorrection: null },
+    verdict: { claimId: claim.id, verdict: "failed", confidence: "low", rationale: message, supporting: [], contradicting: [], independentOrigins: 0, temporal: null, requiredCorrection: "Remove or retry this claim because its audit failed." },
     safety: [],
     errors: [{ url: "", error: message }],
   };

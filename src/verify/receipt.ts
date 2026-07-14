@@ -8,7 +8,7 @@ import { sha256hex } from "./text.js";
 import type { Confidence, ContractEvaluation, NumericCheck, SafetyEvent, Stance, VerdictKind } from "./types.js";
 import type { ExecutionMode } from "./mode.js";
 
-export const WORKFLOW_VERSION = "saga-audit-3";
+export const WORKFLOW_VERSION = "saga-audit-4";
 export const PROMPT_VERSIONS: Record<string, string> = {
   claim_mapper: "1",
   research_plan: "1",
@@ -18,7 +18,7 @@ export const PROMPT_VERSIONS: Record<string, string> = {
   source_quality: "1",
   conflict_analysis: "2",
   numeric_extract: "2",
-  revision: "1",
+  revision: "2",
 };
 
 // Deterministic, key-sorted JSON. Keys are sorted at every level and undefined values are

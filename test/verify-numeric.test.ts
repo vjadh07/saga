@@ -239,6 +239,50 @@ test("date intervals require date-like start and end operands", async () => {
   expect(check!.matches).toBeNull();
 });
 
+test("date intervals reject year-shaped currency and measurement operands", async () => {
+  const currencyClaim: Claim = {
+    id: "c1", originalText: "Revenue rose from $1,000 to $2,000 between 2019 and 2025, a 6-year interval.", normalized: "x", claimType: "numeric",
+    location: { start: 0, end: 1 }, verifiable: true, timeSensitive: false, risk: "high", status: "contracted", asOf: null,
+  };
+  const currencyModel = new MockModelProvider({
+    numeric_extract: [{ kind: "date_interval", inputs: { start: 1000, end: 2000 }, claimedResult: 6, explanation: "treated dollar values as years" }],
+  });
+  const currency = await verifyNumericClaim({ claim: currencyClaim, evidence: [], model: currencyModel });
+  expect(currency!.grounded).toBe(false);
+  expect(currency!.matches).toBeNull();
+  expect(currency!.groundingIssues).toContain("the from and to roles were not verified in the claim or validated evidence");
+
+  const measurementClaim: Claim = {
+    ...currencyClaim,
+    originalText: "The cable length increased from 1,000 mm to 2,000 mm during a 6-year interval.",
+  };
+  const measurementModel = new MockModelProvider({
+    numeric_extract: [{ kind: "date_interval", inputs: { start: 1000, end: 2000 }, claimedResult: 6, explanation: "treated measurements as years" }],
+  });
+  const measurement = await verifyNumericClaim({ claim: measurementClaim, evidence: [], model: measurementModel });
+  expect(measurement!.grounded).toBe(false);
+  expect(measurement!.matches).toBeNull();
+});
+
+test("date intervals accept bare calendar years and explicit local year labels", async () => {
+  for (const originalText of [
+    "The record runs from 2019 to 2025, a 6-year interval.",
+    "The record runs from year 2019 to year 2025, a 6-year interval.",
+  ]) {
+    const dateClaim: Claim = {
+      id: "c1", originalText, normalized: "x", claimType: "numeric",
+      location: { start: 0, end: 1 }, verifiable: true, timeSensitive: false, risk: "high", status: "contracted", asOf: null,
+    };
+    const model = new MockModelProvider({
+      numeric_extract: [{ kind: "date_interval", inputs: { start: 2019, end: 2025 }, claimedResult: 6, explanation: "calendar interval" }],
+    });
+    const check = await verifyNumericClaim({ claim: dateClaim, evidence: [], model });
+    expect(check!.groundingIssues).toEqual([]);
+    expect(check!.grounded).toBe(true);
+    expect(check!.matches).toBe(true);
+  }
+});
+
 test("reverse date intervals match a positive stated duration", async () => {
   const claim: Claim = {
     id: "c1", originalText: "The record runs from 2025 back to 2019, a 6-year interval.", normalized: "x", claimType: "numeric",

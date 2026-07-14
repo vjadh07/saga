@@ -273,8 +273,21 @@ function numberHasTimeContext(text: string, value: number): boolean {
   });
 }
 
+const QUANTITY_PREFIX = /(?:[$€£¥]|(?:usd|eur|gbp|jpy|cad|aud|cny|inr)\s*)$/i;
+const QUANTITY_SUFFIX = /^\s*(?:%|[$€£¥]|(?:usd|eur|gbp|jpy|cad|aud|cny|inr|dollars?|euros?|pounds?|yen|yuan|rupees?|thousand|million|billion|trillion|[kmbt]|mm|cm|km|meters?|metres?|inches?|feet|foot|yards?|miles?|mg|kg|grams?|lbs?|ounces?|liters?|litres?|ml|gallons?|mph|kph|watts?|kw|mw|gw|volts?|units?)\b)/i;
+
+function numberHasQuantityContext(text: string, value: number): boolean {
+  return numberSpans(text).some((span) => {
+    if (span.value !== value) return false;
+    const before = text.slice(Math.max(0, span.start - 24), span.start);
+    const after = text.slice(span.end, span.end + 24);
+    return QUANTITY_PREFIX.test(before) || QUANTITY_SUFFIX.test(after);
+  });
+}
+
 function dateOperandsVerified(text: string, start: number, end: number): boolean {
   if (!hasFromTo(text, start, end)) return false;
+  if (numberHasQuantityContext(text, start) || numberHasQuantityContext(text, end)) return false;
   const plausibleYears = Number.isInteger(start) && Number.isInteger(end) && start >= 1000 && start <= 9999 && end >= 1000 && end <= 9999;
   return plausibleYears || (numberHasTimeContext(text, start) && numberHasTimeContext(text, end));
 }

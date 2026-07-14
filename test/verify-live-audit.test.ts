@@ -53,6 +53,7 @@ test("arbitrary text flows through the full live audit: research, injection, cit
   expect(a.verdict.verdict).toBe("contradicted");
   expect(a.numeric!.computedResult).toBe(25);
   expect(a.numeric!.matches).toBe(false);
+  expect(a.numeric!.grounded).toBe(true);
 
   // the injection was quarantined and never became evidence
   const types = r.flight.map((e) => e.type);
@@ -76,6 +77,7 @@ test("arbitrary text flows through the full live audit: research, injection, cit
   // trust passport and a tamper-evident receipt
   expect(r.passport.documentStatus).toBe("materially_contradicted");
   expect(verifyReceipt(r.receipt).valid).toBe(true);
+  expect(r.receipt.numericChecks).toEqual([a.numeric]);
   expect(types[types.length - 1]).toBe("AUDIT_COMPLETED");
 });
 

@@ -61,7 +61,7 @@ export function groundedArbitrate(input: GroundedArbiterInput): Verdict {
   }
 
   // 1. deterministic arithmetic disproof outranks retrieved evidence
-  if (numeric && numeric.matches === false) {
+  if (numeric?.grounded && numeric.matches === false) {
     return make("contradicted", "high", `The stated figure does not match the underlying numbers (computed ${numeric.computedResult}, claimed ${numeric.claimedResult}).`);
   }
 

@@ -16,10 +16,16 @@ function ev(stance: Evidence["stance"]): Evidence {
 const base = { claim, contractEvaluation: contractEval(), temporal: noTemporal, numeric: null as NumericCheck | null, conflict: noConflict, supportOrigins: 2, contraOrigins: 0 };
 
 test("a deterministic numeric mismatch contradicts with high confidence", () => {
-  const numeric: NumericCheck = { claimId: "c1", kind: "percent_change", expression: "", inputs: {}, computedResult: 25, claimedResult: 40, matches: false, explanation: "" };
+  const numeric: NumericCheck = { claimId: "c1", kind: "percent_change", expression: "", inputs: {}, computedResult: 25, claimedResult: 40, matches: false, explanation: "", grounded: true, groundingIssues: [], sourceEvidenceIds: [] };
   const v = groundedArbitrate({ ...base, evidence: [ev("supports")], numeric });
   expect(v.verdict).toBe("contradicted");
   expect(v.confidence).toBe("high");
+});
+
+test("an ungrounded numeric mismatch cannot contradict a claim", () => {
+  const numeric: NumericCheck = { claimId: "c1", kind: "percent_change", expression: "", inputs: {}, computedResult: 25, claimedResult: 40, matches: null, explanation: "", grounded: false, groundingIssues: ["claimed result absent"], sourceEvidenceIds: [] };
+  const v = groundedArbitrate({ ...base, evidence: [ev("supports")], numeric });
+  expect(v.verdict).toBe("supported");
 });
 
 test("failed research yields a failed verdict, not a contradiction", () => {

@@ -168,12 +168,15 @@ export type NumericKind = (typeof NUMERIC_KINDS)[number];
 export interface NumericCheck {
   claimId: string;
   kind: NumericKind;
-  expression: string;
+  expression: string; // substituted calculation trace, including the computed result
   inputs: Record<string, number>;
   computedResult: number | null;
   claimedResult: number | null;
   matches: boolean | null; // null when there is nothing deterministic to check
   explanation: string;
+  grounded: boolean; // every used input is in the claim or validated evidence
+  groundingIssues: string[];
+  sourceEvidenceIds: string[]; // validated evidence excerpts that supplied inputs
 }
 
 // ---------- source quality ----------

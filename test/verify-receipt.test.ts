@@ -13,6 +13,7 @@ function input(): BuildReceiptInput {
     searchQueries: ["q1", "q2"],
     sources: [{ originalUrl: "https://a/1", finalUrl: "https://a/1", accessedAt: "2026-07-13T00:00:00.000Z", contentHash: "abc" }],
     evidence: [{ id: "e1", claimId: "c1", sourceId: "s1", stance: "supports", excerpt: "an excerpt", relation: "direct_support" }],
+    numericChecks: [{ claimId: "c1", kind: "percent_change", expression: "(100 - 80) / 80 * 100 = 25", inputs: { from: 80, to: 100 }, computedResult: 25, claimedResult: 40, matches: false, explanation: "revenue growth", grounded: true, groundingIssues: [], sourceEvidenceIds: ["e1"] }],
     contractEvaluations: [],
     verdicts: [{ claimId: "c1", verdict: "supported", confidence: "high" }],
     safetyEvents: [],
@@ -50,6 +51,10 @@ test("tampering with any field breaks verification", () => {
   const tampered2 = structuredClone(r);
   tampered2.evidence[0]!.excerpt = "a different excerpt";
   expect(verifyReceipt(tampered2).valid).toBe(false);
+
+  const tampered3 = structuredClone(r);
+  tampered3.numericChecks[0]!.computedResult = 40;
+  expect(verifyReceipt(tampered3).valid).toBe(false);
 });
 
 test("the same inputs produce the same final hash", () => {

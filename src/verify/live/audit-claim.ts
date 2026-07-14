@@ -152,7 +152,7 @@ export async function auditClaim(input: AuditClaimInput): Promise<LiveClaimAudit
   if (temporal.superseded) emit("TEMPORAL_FLAGGED", { claimId: claim.id, note: temporal.note });
 
   // 7. numeric recomputation
-  const numeric = claim.claimType === "numeric" ? await verifyNumericClaim({ claim, model }) : null;
+  const numeric = claim.claimType === "numeric" ? await verifyNumericClaim({ claim, evidence: validated, model }) : null;
 
   // 8. operational contract enforcement
   const contractEvaluation = evaluateContract({

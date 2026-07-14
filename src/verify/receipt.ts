@@ -5,10 +5,10 @@
 // JSON and hashed, so any later modification is detectable. No blockchain: one hash over
 // deterministic JSON is enough.
 import { sha256hex } from "./text.js";
-import type { Confidence, ContractEvaluation, SafetyEvent, Stance, VerdictKind } from "./types.js";
+import type { Confidence, ContractEvaluation, NumericCheck, SafetyEvent, Stance, VerdictKind } from "./types.js";
 import type { ExecutionMode } from "./mode.js";
 
-export const WORKFLOW_VERSION = "saga-audit-1";
+export const WORKFLOW_VERSION = "saga-audit-2";
 export const PROMPT_VERSIONS: Record<string, string> = {
   claim_mapper: "1",
   research_plan: "1",
@@ -17,7 +17,7 @@ export const PROMPT_VERSIONS: Record<string, string> = {
   citation_assessment: "1",
   source_quality: "1",
   conflict_analysis: "1",
-  numeric_extract: "1",
+  numeric_extract: "2",
   revision: "1",
 };
 
@@ -67,6 +67,7 @@ export interface BuildReceiptInput {
   searchQueries: string[];
   sources: ReceiptSource[];
   evidence: ReceiptEvidenceInput[];
+  numericChecks: NumericCheck[];
   contractEvaluations: ContractEvaluation[];
   verdicts: ReceiptVerdict[];
   safetyEvents: SafetyEvent[];
@@ -88,6 +89,7 @@ export interface AuditReceipt {
   searchQueries: string[];
   sources: ReceiptSource[];
   evidence: ReceiptEvidence[];
+  numericChecks: NumericCheck[];
   contractEvaluations: ContractEvaluation[];
   verdicts: ReceiptVerdict[];
   safetyEvents: SafetyEvent[];
@@ -111,6 +113,7 @@ export function buildReceipt(input: BuildReceiptInput): AuditReceipt {
     searchQueries: input.searchQueries,
     sources: input.sources,
     evidence: input.evidence.map((e) => ({ ...e, excerptHash: sha256hex(e.excerpt) })),
+    numericChecks: input.numericChecks,
     contractEvaluations: input.contractEvaluations,
     verdicts: input.verdicts,
     safetyEvents: input.safetyEvents,

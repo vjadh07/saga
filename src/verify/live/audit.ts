@@ -118,6 +118,7 @@ export async function runLiveAudit(input: LiveAuditInput): Promise<LiveAuditResu
     searchQueries: [...new Set(claimAudits.flatMap((a) => a.plan?.supportingQueries.concat(a.plan.skepticQueries) ?? []))],
     sources: citedAll.map((s) => ({ originalUrl: s.url, finalUrl: s.canonicalUrl ?? s.url, accessedAt: now, contentHash: "" })),
     evidence: allEvidence.map((e) => ({ id: e.id, claimId: e.claimId, sourceId: e.sourceId, stance: e.stance, excerpt: e.excerpt, relation: e.citationAssessment?.relation })),
+    numericChecks: claimAudits.flatMap((a) => a.numeric ? [a.numeric] : []),
     contractEvaluations: claimAudits.map((a) => a.contractEvaluation),
     verdicts: claimAudits.map((a) => ({ claimId: a.claim.id, verdict: a.verdict.verdict, confidence: a.verdict.confidence })),
     safetyEvents: claimAudits.flatMap((a) => a.safety),

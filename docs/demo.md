@@ -1,81 +1,238 @@
-# Saga demo runbook
+# Saga hackathon demo runbook
 
-Three acts: an agent books a trip and is killed mid-action, a restart recovers exactly-once, and then the auditor catches a vendor lying. The crash is a real SIGKILL fired at a fixed ledger event; the audit runs over a seeded, deterministic history. Nothing depends on timing or luck.
+The primary demo is the evidence auditor. It has two intentionally separate paths:
 
-## Setup: three panes plus a browser
+- Demo mode is the reliable, deterministic presentation path.
+- Live mode proves arbitrary-text orchestration when local providers are available.
 
-Pane 1, mock vendors (own process and SQLite state, so they survive the agent dying):
+Never present Demo output as the result of a failed Live request. If Live is unavailable,
+say that the external smoke path is unavailable and open the clearly labeled Demo route.
 
+## Primary demo: evidence audit
+
+### Preflight
+
+Use Node 22.5 or newer. From the repository root:
+
+```bash
+npm install
+npm test
+npm run typecheck
+npm run demo:reset
+npm run verify
 ```
+
+Do not quote a remembered test count. Use the count printed by the current run.
+
+`npm run verify` is the deterministic terminal proof. Confirm that it completes before
+opening the browser. It does not need a model login, search key, or network.
+
+Start Studio:
+
+```bash
+npm run studio
+```
+
+Open `http://127.0.0.1:4500/demo`. This is the guest Demo route. No account is required.
+
+### Act 1: map the risk
+
+The committed Northwind Energy brief contains five claims with different failure modes.
+Start in the submitted-document pane and click each highlighted claim.
+
+Use these exact, fixture-backed talking points:
+
+- The shipment claim has two genuinely independent supporting origins.
+- The 40-year lifespan claim conflicts with the datasheet and independent testing.
+- The present-tense market-leader claim is superseded by newer evidence.
+- The 99% recyclable claim omits the gap between recyclable in principle and recycled in
+  practice.
+- The customer-experience claim is subjective and is not forced into a factual verdict.
+
+Say that this route is a constructed world. Its purpose is repeatable demonstration of the
+workflow, not proof of real-world accuracy.
+
+### Act 2: show adversarial research
+
+Open the selected-claim evidence and the Agent Flight Recorder.
+
+For the lifespan claim, point to the Safety Sentinel entry. The hostile page asks the
+auditor to trust it and record the false 40-year claim. Saga treats the page as data,
+quarantines the instruction-like text, and does not use it as supporting evidence.
+
+For the market-leader claim, open Source lineage. An apparent five-source cluster traces
+to one company release. The Trust Passport counts independent origins, not article count.
+
+Keep the safety claim precise. Saga uses sanitization, read-only tools, schema validation,
+and human approval as defense in depth. It is not a proof against every novel injection.
+
+### Act 3: show the usable result
+
+Open the corrected draft. The original stays unchanged, and each proposed change can be
+unchecked. Then point to the Trust Passport and its claim counts, primary-source count,
+independent-origin count, and revision status.
+
+The Demo flight events are deterministic events from the fixture pipeline. They are not
+animations or fabricated progress. The Live workspace follows the same rule and displays
+only persisted stages and flight events.
+
+### Reset and repeat
+
+```bash
+npm run demo:reset
+```
+
+The command clears local audit history, the transaction ledger, and local mock-vendor
+state. It does not modify the committed Northwind fixture, so `/demo` returns the same
+result after every reset.
+
+## Optional Live act
+
+Live mode requires all of the following:
+
+- a locally installed, logged-in Claude Code CLI
+- `BRAVE_SEARCH_API_KEY` in `.env`
+- outbound DNS and HTTPS access
+- public sources that the secure fetcher can read as HTML or plain text
+
+Open `http://127.0.0.1:4500/`, paste the exact document rehearsed on the presentation
+machine, choose Quick, Deep, or High-stakes, and click Verify.
+
+What the browser does:
+
+1. `POST /api/audits` creates a guest Live audit.
+2. The local worker maps claims and runs the provider-backed workflow.
+3. The page polls `GET /api/audits/:id` every 750 ms.
+4. Persisted stage changes and real flight events appear as they are recorded.
+5. A completed or partial result shows the corrected draft, Trust Passport, and receipt.
+6. The audit ID remains in the URL, so refresh reloads the SQLite record.
+
+This is polling, not Server-Sent Events. Do not describe it as streaming.
+
+Before demo day, run the exact Live input twice on the same machine. Record whether the
+providers completed, which sources were reachable, and how long the run took. Search and
+page content can change, so do not promise a specific Live verdict until it has been
+observed in that rehearsal.
+
+### Live failure handling
+
+- A missing Brave key or Claude login is a Live configuration failure.
+- A blocked or unreadable page is recorded as a retrieval failure.
+- One failed claim can produce a partial result while other claims finish.
+- Cancel stops the current audit. Retry clears derived output and starts the same audit
+  again from persisted input.
+- A failed Live run remains failed. Studio never inserts fixture evidence or a Demo
+  verdict.
+
+If Live fails during judging, leave the failure visible long enough to explain it, then
+open `/demo` manually and state that it is the deterministic fallback. Do not imply that
+the Demo result came from the submitted Live text.
+
+## Deterministic evaluation check
+
+```bash
+npm run eval
+```
+
+This runs a small hidden-label check through the Live orchestration with deterministic
+mock model, search, and page providers. Gold verdicts are consulted only after each audit
+returns. It is a useful pipeline regression check, but it is not an external benchmark or
+a production-provider smoke test.
+
+## Primary-demo rehearsal checklist
+
+Run this twice, back to back:
+
+1. `npm run demo:reset` completes.
+2. `npm run verify` produces the deterministic Northwind audit.
+3. `npm run studio` serves `/demo` without requiring a judge account.
+4. The five claim highlights are selectable.
+5. The injection quarantine and lineage cluster are visible.
+6. The corrected draft toggles preserve the original.
+7. The Trust Passport is visible and clearly labeled Demo.
+8. If Live providers are configured, the rehearsed Live input reaches a terminal state.
+9. Refreshing that Live audit reloads its persisted state.
+10. If Live providers are not configured, the presenter says so and does not claim a
+    smoke result.
+
+## Primary-demo fallbacks
+
+- If Studio does not start, use `npm run verify` as the deterministic terminal surface.
+- If the model adapter hangs, check `which claude` and set `CLAUDE_CODE_PATH` to the native
+  CLI. The x64 SDK-bundled CLI has previously hung on this arm64 Mac.
+- If Brave Search rejects requests, verify `BRAVE_SEARCH_API_KEY` and keep the Live failure
+  visible. Then open `/demo` manually.
+- If a Live page is rejected, inspect the recorded failure. Private addresses, redirects
+  to blocked addresses, oversized responses, and unsupported content types are rejected
+  intentionally.
+- If stale local audits confuse rehearsal, run `npm run demo:reset` and restart Studio.
+
+## Secondary demo: original transaction engine
+
+This is the earlier three-act Saga demonstration. It is optional for the current pitch,
+but remains useful if judges ask about Saga's transaction substrate.
+
+### Setup
+
+Pane 1, mock vendors:
+
+```bash
 npm run vendors
 ```
 
-Pane 2, live ledger viewer, then open http://127.0.0.1:4200 in a browser:
+Pane 2, ledger viewer, then open `http://127.0.0.1:4200`:
 
-```
+```bash
 npm run viewer
 ```
 
-Pane 3 is the agent. Fresh state before showtime:
+Pane 3, reset state:
 
-```
+```bash
 npm run reset
 ```
 
-Optional pitch surface: `npm run site` serves the landing page on http://127.0.0.1:4400 for the story before the terminal work starts.
+If Google Calendar is configured, the calendar action uses the real adapter. Otherwise it
+uses the mock and prints that choice at boot.
 
-If Google Calendar is wired (one-time `npm run gcal-auth`, needs GCAL_CLIENT_ID and GCAL_CLIENT_SECRET in .env), the calendar leg is real and the event appears on the actual calendar in act 2. Without it the mock stands in; the agent prints which one it is using at boot.
+### Transaction act 1: fixed crash
 
-## Act 1: the crash
-
-```
+```bash
 CRASH_AFTER="hotel.book:CALLED" npm run agent -- "book me a one way flight from PHX to SFO next friday and a hotel in san francisco friday to sunday, then add the trip to my calendar"
 ```
 
-What the audience sees: the model reasons out loud, searches, books the flight (COMMITTED on the viewer), then starts the hotel and the process dies mid-action, no goodbye. The viewer shows the truth: flight COMMITTED, hotel stuck at CALLED. Say it plainly: the ledger recorded the intent before the network call, and the process is gone.
+The fixed crash occurs after the hotel intent is durably recorded. The viewer should show
+the flight committed and the hotel called. The vendor oracle should contain the flight and
+no hotel if the call did not leave the process:
 
-Point at the vendor oracle if asked: `curl -s http://127.0.0.1:4100/admin/bookings` shows one flight row and no hotel row. The hotel call never left the building; a naive agent restarting here would have no idea whether it did.
-
-## Act 2: the resurrection
-
+```bash
+curl -s http://127.0.0.1:4100/admin/bookings
 ```
+
+### Transaction act 2: recovery
+
+```bash
 npm run agent -- "finish booking my trip"
 ```
 
-On boot, before the model gets a word in, the engine replays every in-flight action: it asks the hotel vendor "did my call land?", hears no, and re-executes exactly once. Then the model reads trip_status, sees flight and hotel committed, and finishes the job: the calendar event (real one if wired). Final receipt: three actions, all COMMITTED.
+Recovery runs before the model continues. It reconciles the in-flight hotel action and
+finishes the remaining work without duplicating a landed effect. `test/kill9.test.ts`
+covers both crash directions with a real process kill.
 
-The exactly-once claim is not vibes: test/kill9.test.ts proves both directions with a real SIGKILL, including the nasty case where the effect landed but the crash beat the COMMITTED write, and recovery must NOT call again.
+Optional unwind:
 
-If judges want the unwind: `npm run agent -- "cancel my whole trip"` compensates everything newest-first, each undo verified against the vendor, and the real calendar event disappears.
-
-## Act 3: the audit
-
-Reseed the world with a month of history and five planted reconciliation breaks, then restart the vendors pane (its database file was replaced):
-
+```bash
+npm run agent -- "cancel my whole trip"
 ```
+
+### Transaction act 3: reconciliation audit
+
+```bash
 npm run seed
-# restart pane 1: Ctrl+C, then npm run vendors
+# restart the vendors process after seeding
 npm run audit -- "investigate the hotels vendor"
 ```
 
-The presenter types the prompt, never a judge. What the audience sees: the auditor runs reconciliation, five breaks surface, and it walks the damning ones with evidence: two bookings the vendor holds that no ledger intent ever authorized, a duplicate charge for an authorized stay, a booking still live that the ledger says was compensated, and a wedged action. It saves a markdown report and summarizes by severity.
-
-Language rule: these are reconciliation breaks, never anything more sensational. The ledger says X, the vendor says Y, one of them cannot be right.
-
-Fallback: if the model stalls more than 15 seconds, open reports/audit-fallback.md and read the SHADOW_EFFECT and DUPLICATE_CHARGE sections aloud. The findings are deterministic; only the narration is live.
-
-## Rehearsal checklist (do this twice, back to back)
-
-1. `npm run reset`
-2. Act 1: agent dies by SIGKILL (exit 137), viewer shows flight COMMITTED and hotel CALLED, oracle has one flight row, zero hotel rows.
-3. Act 2: recovery line prints before the model speaks, receipt ends with flight, hotel, calendar all COMMITTED, oracle has exactly one row each.
-4. Act 3: `npm run seed`, restart vendors, `npm run audit` finds exactly 5 breaks (2 SHADOW_EFFECT, 1 DUPLICATE_CHARGE, 1 PHANTOM_COMPENSATION, 1 WEDGED_SAGA) and saves a report.
-5. Confirm run 2 converged to the same states and counts as run 1 (ids and timestamps differ, states and counts must not).
-
-## Fallbacks
-
-- The model books in a weird order or skips the hotel: reset and rerun. The prompt pins the order; fixtures and the cheap-flight preference keep it on rails.
-- The agent or auditor hangs at boot: the SDK is probably not finding the native claude CLI. `which claude` must resolve; see the Rosetta gotcha in HANDOFF.md.
-- A stray claude subprocess can outlive the SIGKILL in act 1. It is harmless (its stdin is dead), but `pkill -f "local/bin/claude --output-format"` between rehearsals keeps ps clean.
-- The auditor stalls: reports/audit-fallback.md is committed to the repo, read from it.
-- Vendors or viewer die: both are stateless processes over their SQLite files, just restart the pane.
+Describe findings as reconciliation breaks. The seeded state is synthetic, so do not use
+a stronger accusation. If the live narrator stalls, use `reports/audit-fallback.md` and
+state that it is the committed deterministic report.

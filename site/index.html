@@ -479,17 +479,17 @@ claim <span class="dim">"batteries last 40 years"</span>
       </div>
       <div class="cell spot b-c" data-reveal style="--i:2">
         <div class="num">0%</div>
-        <h3>injection attacks land</h3>
-        <p>On SagaBench the naive baselines are fooled by every poisoned page. Saga quarantines them and is fooled by none.</p>
+        <h3>fixture attacks land</h3>
+        <p>In the committed adversarial fixture, Saga quarantines every seeded instruction injection. This is a deterministic regression check, not a general safety benchmark.</p>
       </div>
       <div class="cell spot b-d" data-reveal>
         <h3>It abstains on purpose</h3>
         <p>No evidence either way returns insufficient, not a confident guess. Opinions are marked not verifiable, not scored.</p>
       </div>
       <div class="cell spot b-e" data-reveal style="--i:1">
-        <div class="num">138</div>
-        <h3>tests, all green</h3>
-        <p>Every deterministic stage is covered. No network and no LLM in the test suite, so the audit is reproducible.</p>
+        <div class="num">TDD</div>
+        <h3>deterministic checks</h3>
+        <p>The mock-provider suite makes no external calls, so core audit behavior stays reproducible without claiming a live-provider result.</p>
       </div>
       <div class="cell spot b-f" data-reveal style="--i:2">
         <h3>Old is not the same as false</h3>
@@ -525,13 +525,13 @@ claim <span class="dim">"batteries last 40 years"</span>
 <section id="use">
   <div class="wrap">
     <h2 data-reveal>Use it</h2>
-    <p class="lede" data-reveal style="--i:1">Clone it and audit the demo report. Node 22.5 or newer is the only requirement; the live claim extractor also wants a logged-in Claude Code install.</p>
+    <p class="lede" data-reveal style="--i:1">Clone it and audit the demo report. Node 22.5 or newer is the only requirement. Live audits also need Brave Search and a logged-in Claude Code install.</p>
     <div class="use-grid">
       <div data-reveal>
         <h3>Run the whole thing</h3>
         <pre class="block">git clone https://github.com/vjadh07/saga
 cd saga &amp;&amp; npm install
-npm test          <span class="c"># 138 tests, no network, no LLM</span>
+npm test          <span class="c"># deterministic and mock-provider checks</span>
 
 npm run verify    <span class="c"># audit the demo report in the terminal</span>
 npm run studio    <span class="c"># the audit workspace on :4500</span>

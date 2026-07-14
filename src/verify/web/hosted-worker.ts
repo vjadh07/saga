@@ -1,12 +1,15 @@
 import type { AuditResult } from "../pipeline.js";
 import { renderStudioPage } from "./page.js";
 
-export function renderHostedDemoWorker(result: AuditResult): string {
-  const html = "<!doctype html>\n" + renderStudioPage(result, {
+export function renderHostedDemoPage(result: AuditResult): string {
+  return "<!doctype html>\n" + renderStudioPage(result, {
     initialView: "demo",
     hostedDemoOnly: true,
   });
+}
 
+export function renderHostedDemoWorker(result: AuditResult): string {
+  const html = renderHostedDemoPage(result);
   return `const HTML=${JSON.stringify(html)};
 const HTML_HEADERS={
   "cache-control":"public, max-age=300",

@@ -82,3 +82,34 @@ test("does not use any fixture stance label to decide support", async () => {
   const r = await investigateClaim({ claim, plan: plan({ maximumIterations: 1 }), search, fetcher, model });
   expect(r.evidence).toHaveLength(0);
 });
+
+test("records every fetch when a revised query reaches the same source again", async () => {
+  const search = new FixtureSearchProvider({
+    "first solar query": [{ title: "Agency", url: "https://gov.example/repeat", snippet: "s" }],
+    "revised solar query": [{ title: "Agency", url: "https://gov.example/repeat", snippet: "s" }],
+  });
+  let fetched = 0;
+  const fetcher = new FixturePageFetcher(
+    { "https://gov.example/repeat": { title: "Agency", text: "The agency published a solar capacity report." } },
+    () => `2026-07-13T00:00:0${fetched++}.000Z`,
+  );
+  const model = new MockModelProvider({
+    investigator_assess: [{ relevant: false, supports: false, excerpt: "", relevance: "weak", reasoning: "not enough" }],
+    investigator_revise: [{ queries: ["revised solar query"] }],
+  });
+
+  const r = await investigateClaim({
+    claim,
+    plan: plan({ supportingQueries: ["first solar query"], minimumIndependentOrigins: 2, maximumIterations: 2 }),
+    search,
+    fetcher,
+    model,
+  });
+  expect(r.queriesUsed).toEqual(["first solar query", "revised solar query"]);
+  expect(r.sourcesExamined).toHaveLength(1);
+  expect(r.sourcesExamined[0]!.retrievals).toHaveLength(2);
+  expect(r.sourcesExamined[0]!.retrievals!.map((entry) => entry.fetchedAt)).toEqual([
+    "2026-07-13T00:00:00.000Z",
+    "2026-07-13T00:00:01.000Z",
+  ]);
+});

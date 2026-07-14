@@ -87,6 +87,16 @@ export interface ContractEvaluation {
 
 // ---------- sources and evidence ----------
 
+export interface SourceRetrieval {
+  originalUrl: string;
+  finalUrl: string;
+  fetchedAt: string; // ISO timestamp for this specific retrieval
+  contentHash: string; // sha256 of the raw fetched text before sanitization
+  claimId?: string;
+  agent?: "investigator" | "skeptic";
+  query?: string;
+}
+
 export interface Source {
   id: string;
   url: string;
@@ -98,6 +108,9 @@ export interface Source {
   content: string; // as retrieved, possibly untrusted
   quotes: string[]; // deterministically extracted quotations
   outboundCitations: string[]; // URLs this source points at
+  // Live retrieval attaches one entry per fetch. Optional so deterministic fixture
+  // sources and persisted legacy records remain compatible.
+  retrievals?: SourceRetrieval[];
 }
 
 export const STANCES = ["supports", "contradicts", "qualifies", "irrelevant"] as const;
@@ -372,6 +385,7 @@ export interface DraftChange {
   note: string;
   citations?: string[]; // evidence ids the replacement prose is grounded in
   source?: "revision_agent" | "deterministic_marker" | "deterministic_revision"; // how the replacement was produced
+  numericCheckClaimId?: string; // set only when the replacement prose used this deterministic numeric check
 }
 
 export interface CorrectedDraft {

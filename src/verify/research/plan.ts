@@ -8,10 +8,12 @@ import { SOURCE_TYPES, type Claim, type EvidenceContract } from "../types.js";
 import type { AuditMode } from "../mapview.js";
 import type { ModelProvider } from "../providers/model.js";
 
+const QueryTextSchema = z.string().trim().min(3);
+
 export const ResearchPlanSchema = z.object({
   claimId: z.string(),
-  supportingQueries: z.array(z.string()).min(1),
-  skepticQueries: z.array(z.string()).min(1),
+  supportingQueries: z.array(QueryTextSchema).min(1),
+  skepticQueries: z.array(QueryTextSchema).min(1),
   preferredSourceTypes: z.array(z.enum(SOURCE_TYPES)).min(1),
   primaryRequired: z.boolean(),
   minimumIndependentOrigins: z.number().int().min(1),
@@ -24,8 +26,8 @@ export type ResearchPlan = z.infer<typeof ResearchPlanSchema>;
 
 // only the queries come from the model; everything else is deterministic
 const QueriesSchema = z.object({
-  supportingQueries: z.array(z.string().min(3)).min(1).max(6),
-  skepticQueries: z.array(z.string().min(3)).min(1).max(6),
+  supportingQueries: z.array(QueryTextSchema).min(1).max(6),
+  skepticQueries: z.array(QueryTextSchema).min(1).max(6),
 });
 
 const BUDGETS: Record<AuditMode, { minOrigins: number; maxIterations: number; maxSources: number }> = {

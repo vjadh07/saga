@@ -2,13 +2,14 @@
 // failure isolation, detects cross-claim dependencies, builds the Trust Passport, produces
 // the revised draft through the Revision Agent, and emits a tamper-evident receipt. This is
 // the live counterpart of runAudit; it never touches fixture labels.
-import { auditClaim, type LiveClaimAudit } from "./audit-claim.js";
+import { auditClaim, createLiveClaimTrace, type LiveClaimAudit, type LiveClaimTrace } from "./audit-claim.js";
 import { detectDependencies, propagateReevaluation } from "../research/dependencies.js";
 import { reviseChange } from "../research/revision.js";
 import { buildPassport } from "../passport.js";
 import { buildReceipt, type AuditReceipt } from "../receipt.js";
 import { detectLineage } from "../lineage.js";
 import { citedSources } from "../corpus.js";
+import { sha256hex } from "../text.js";
 import type { AuditMode } from "../mapview.js";
 import type { ModelProvider } from "../providers/model.js";
 import type { PageFetcher } from "../providers/fetch.js";
@@ -73,11 +74,13 @@ export async function runLiveAudit(input: LiveAuditInput): Promise<LiveAuditResu
   // audit each claim with failure isolation
   const claimAudits: LiveClaimAudit[] = [];
   for (const claim of claims) {
+    const trace = createLiveClaimTrace();
     try {
-      claimAudits.push(await auditClaim({ claim, mode, model, search, fetcher, now, emit: emitFor(claim.id) }));
+      claimAudits.push(await auditClaim({ claim, mode, model, search, fetcher, now, trace, emit: emitFor(claim.id) }));
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      claimAudits.push(failedClaimAudit(claim, message));
+      const rawMessage = err instanceof Error ? err.message : String(err);
+      const message = rawMessage.trim() || "claim audit failed without an error message";
+      claimAudits.push(failedClaimAudit(claim, message, trace));
       emit("VERDICT_REACHED", claim.id, { verdict: "failed", confidence: "low", error: message });
     }
   }
@@ -89,8 +92,7 @@ export async function runLiveAudit(input: LiveAuditInput): Promise<LiveAuditResu
 
   // document-level provenance from all accepted evidence
   const allEvidence: Evidence[] = claimAudits.flatMap((a) => a.evidence);
-  const byId = new Map<string, Source>();
-  for (const a of claimAudits) for (const s of a.sourcesExamined) if (!byId.has(s.id)) byId.set(s.id, s);
+  const byId = collectSources(claimAudits);
   const citedAll = citedSources(allEvidence, byId);
   const primarySourceCount = new Set(citedAll.filter((s) => s.sourceType === "primary").map((s) => s.id)).size;
   const independentOrigins = detectLineage(citedAll).independentOrigins;
@@ -105,7 +107,32 @@ export async function runLiveAudit(input: LiveAuditInput): Promise<LiveAuditResu
   }
   const correctedDraft = assembleDraft(document, claims, changes);
 
-  emit("AUDIT_COMPLETED", "", { documentStatus: passport.documentStatus, claimsRequiringRevision: passport.claimsRequiringRevision });
+  const revisions = changes.map((change) => {
+    if (!change.source) throw new Error(`revision ${change.claimId} is missing its production source`);
+    return {
+      claimId: change.claimId,
+      kind: change.kind,
+      original: change.original,
+      replacement: change.replacement,
+      citationEvidenceIds: change.citations ?? [],
+      source: change.source,
+      numericCheckClaimId: change.numericCheckClaimId ?? null,
+    };
+  });
+
+  let searchSequence = 0;
+  const searches = claimAudits.flatMap((audit) => audit.executedSearches.map((searchRecord) => ({
+    sequence: ++searchSequence,
+    claimId: audit.claim.id,
+    agent: searchRecord.agent,
+    query: searchRecord.query,
+  })));
+  let failureSequence = 0;
+  const failures = claimAudits.flatMap((audit) => audit.errors.map((error) => ({
+    sequence: ++failureSequence,
+    claimId: audit.claim.id,
+    ...error,
+  })));
 
   const receipt = buildReceipt({
     auditId,
@@ -115,19 +142,73 @@ export async function runLiveAudit(input: LiveAuditInput): Promise<LiveAuditResu
     searchProvider: search.id,
     document,
     finalDraft: correctedDraft.draft,
-    searchQueries: [...new Set(claimAudits.flatMap((a) => a.plan?.supportingQueries.concat(a.plan.skepticQueries) ?? []))],
-    sources: citedAll.map((s) => ({ originalUrl: s.url, finalUrl: s.canonicalUrl ?? s.url, accessedAt: now, contentHash: "" })),
-    evidence: allEvidence.map((e) => ({ id: e.id, claimId: e.claimId, sourceId: e.sourceId, stance: e.stance, excerpt: e.excerpt, relation: e.citationAssessment?.relation })),
+    searches,
+    sources: [...byId.values()].map((source) => ({
+      sourceId: source.id,
+      sanitizedContentHash: sha256hex(source.content),
+      retrievals: (source.retrievals ?? []).map((retrieval) => {
+        if (!retrieval.claimId || !retrieval.agent || !retrieval.query) {
+          throw new Error(`source ${source.id} is missing live retrieval execution provenance`);
+        }
+        return {
+          claimId: retrieval.claimId,
+          agent: retrieval.agent,
+          query: retrieval.query,
+          originalUrl: retrieval.originalUrl,
+          finalUrl: retrieval.finalUrl,
+          accessedAt: retrieval.fetchedAt,
+          contentHash: retrieval.contentHash,
+        };
+      }),
+    })),
+    evidence: allEvidence.map((evidence) => {
+      if (!evidence.citationAssessment) throw new Error(`evidence ${evidence.id} is missing citation validation`);
+      return {
+        id: evidence.id,
+        claimId: evidence.claimId,
+        sourceId: evidence.sourceId,
+        stance: evidence.stance,
+        excerpt: evidence.excerpt,
+        citationAssessment: evidence.citationAssessment,
+      };
+    }),
     numericChecks: claimAudits.flatMap((a) => a.numeric ? [a.numeric] : []),
     contractEvaluations: claimAudits.map((a) => a.contractEvaluation),
-    verdicts: claimAudits.map((a) => ({ claimId: a.claim.id, verdict: a.verdict.verdict, confidence: a.verdict.confidence })),
+    verdicts: claimAudits.map((a) => ({
+      claimId: a.claim.id,
+      verdict: a.verdict.verdict,
+      confidence: a.verdict.confidence,
+      supportingEvidenceIds: a.verdict.supporting,
+      contradictingEvidenceIds: a.verdict.contradicting,
+    })),
+    revisions,
     safetyEvents: claimAudits.flatMap((a) => a.safety),
+    failures,
     approvedChangeIds: [],
     startedAt,
     completedAt: now,
   });
 
+  emit("AUDIT_COMPLETED", "", { documentStatus: passport.documentStatus, claimsRequiringRevision: passport.claimsRequiringRevision });
+
   return { auditId, mode: "live", document, claimAudits, dependencies, reevaluation, passport, correctedDraft, receipt, flight };
+}
+
+function collectSources(claimAudits: LiveClaimAudit[]): Map<string, Source> {
+  const sources = new Map<string, Source>();
+  for (const audit of claimAudits) {
+    for (const source of audit.sourcesExamined) {
+      const existing = sources.get(source.id);
+      if (!existing) {
+        sources.set(source.id, source);
+        continue;
+      }
+      if (source !== existing && source.retrievals?.length) {
+        existing.retrievals = [...(existing.retrievals ?? []), ...source.retrievals];
+      }
+    }
+  }
+  return sources;
 }
 
 function assembleDraft(document: string, claims: Claim[], changes: DraftChange[]): CorrectedDraft {
@@ -143,20 +224,36 @@ function assembleDraft(document: string, claims: Claim[], changes: DraftChange[]
   return { original: document, changes, draft };
 }
 
-function failedClaimAudit(claim: Claim, message: string): LiveClaimAudit {
+function failedClaimAudit(claim: Claim, message: string, trace: LiveClaimTrace): LiveClaimAudit {
   return {
     claim,
     contract: { claimId: claim.id, supportingCriteria: [], contradictingCriteria: [], abstentionConditions: [], preferredSourceTypes: ["unknown"], primaryRequired: false },
     plan: null,
     evidence: [],
     sourceQuality: [],
-    sourcesExamined: [],
+    sourcesExamined: mergeSources(trace.sourcesExamined),
     contractEvaluation: { claimId: claim.id, supportingCriteriaMet: false, contradictingCriteriaMet: false, primaryRequirementMet: false, preferredSourceRequirementMet: false, independentOriginRequirementMet: false, temporalRequirementMet: true, triggeredAbstentionConditions: [message], explanation: message },
     temporal: { scope: "undated", claimAsOf: null, latestEvidenceAt: null, superseded: false, note: "" },
     numeric: null,
     conflict: { claimId: claim.id, hasConflict: false, cause: "none", reconciled: false, explanation: "" },
     verdict: { claimId: claim.id, verdict: "failed", confidence: "low", rationale: message, supporting: [], contradicting: [], independentOrigins: 0, temporal: null, requiredCorrection: "Remove or retry this claim because its audit failed." },
-    safety: [],
-    errors: [{ url: "", error: message }],
+    executedSearches: trace.executedSearches,
+    safety: trace.safety,
+    errors: [...trace.errors, { agent: "pipeline", operation: "claim", query: null, url: null, error: message }],
   };
+}
+
+function mergeSources(input: Source[]): Source[] {
+  const byId = new Map<string, Source>();
+  for (const source of input) {
+    const existing = byId.get(source.id);
+    if (!existing) {
+      byId.set(source.id, source);
+      continue;
+    }
+    if (source !== existing && source.retrievals?.length) {
+      existing.retrievals = [...(existing.retrievals ?? []), ...source.retrievals];
+    }
+  }
+  return [...byId.values()];
 }

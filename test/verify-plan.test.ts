@@ -58,3 +58,9 @@ test("a model response with no queries is rejected at the boundary", async () =>
   const model = new MockModelProvider({ research_plan: [{ supportingQueries: [], skepticQueries: [] }] });
   await expect(planResearch({ claim: c, contract: defaultContract(c), mode: "deep", model })).rejects.toThrow();
 });
+
+test("whitespace-only model queries are rejected at the boundary", async () => {
+  const c = claim();
+  const model = new MockModelProvider({ research_plan: [{ supportingQueries: ["   "], skepticQueries: ["valid skeptic query"] }] });
+  await expect(planResearch({ claim: c, contract: defaultContract(c), mode: "deep", model })).rejects.toThrow();
+});

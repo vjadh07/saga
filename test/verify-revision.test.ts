@@ -35,6 +35,22 @@ test("validateRevision rejects unknown citations instead of dropping them", () =
   expect(v.reason).toMatch(/citation/i);
 });
 
+test("validateRevision rejects an eligible citation that did not ground the replacement", () => {
+  const unused: Evidence = {
+    ...evidence[0]!, id: "unused", sourceId: "unused-source", excerpt: "Northwind remained second in a separate ranking",
+  };
+  const v = validateRevision({
+    claimId: claim.id,
+    original: claim.originalText,
+    replacement: "A rival overtook Northwind in 2025.",
+    verdictKind: "outdated",
+    citationIds: ["e1", "unused"],
+    evidence: [...evidence, unused],
+  });
+  expect(v.ok).toBe(false);
+  expect(v.reason).toMatch(/unused citation/i);
+});
+
 test("validateRevision rejects prose that restates a contradicted claim", () => {
   const v = validateRevision({ claimId: claim.id, original: claim.originalText, replacement: claim.originalText, verdictKind: "contradicted", citationIds: ["e1"], evidence });
   expect(v.ok).toBe(false);
@@ -149,6 +165,55 @@ test("a numeric mismatch cannot retain the disproven claimed result from cited p
   expect(v.reason).toMatch(/number|numeric|result/i);
 });
 
+test("numeric source citations are allowed only when the replacement uses the grounded numeric check", () => {
+  const numericEvidence: Evidence = {
+    ...evidence[0]!, id: "numeric-source", sourceId: "numeric-source", excerpt: "Revenue grew from 80 to 100",
+  };
+  const numeric: NumericCheck = {
+    claimId: "c1", kind: "percent_change", expression: "((100 - 80) / 80) * 100 = 25", inputs: { from: 80, to: 100 }, computedResult: 25, claimedResult: 40,
+    matches: false, explanation: "verified arithmetic", grounded: true, groundingIssues: [], sourceEvidenceIds: ["numeric-source"],
+  };
+
+  const used = validateRevision({
+    claimId: claim.id,
+    original: claim.originalText,
+    replacement: "The verified percent change is 25%.",
+    verdictKind: "contradicted",
+    citationIds: ["numeric-source"],
+    evidence: [numericEvidence],
+    numeric,
+  });
+  expect(used.ok).toBe(true);
+  expect(used.citations).toEqual(["numeric-source"]);
+
+  const unused = validateRevision({
+    claimId: claim.id,
+    original: claim.originalText,
+    replacement: "A rival overtook Northwind in 2025.",
+    verdictKind: "outdated",
+    citationIds: ["e1", "numeric-source"],
+    evidence: [...evidence, numericEvidence],
+    numeric,
+  });
+  expect(unused.ok).toBe(false);
+  expect(unused.reason).toMatch(/unused citation/i);
+});
+
+test("reviseChange rejects model prose carrying an unused eligible citation", async () => {
+  const unused: Evidence = {
+    ...evidence[0]!, id: "unused", sourceId: "unused-source", excerpt: "Northwind remained second in a separate ranking",
+  };
+  const model = new MockModelProvider({ revision: [{ replacement: "A rival overtook Northwind in 2025.", citationEvidenceIds: ["e1", "unused"] }] });
+  const change = await reviseChange({
+    claim,
+    verdict: { ...verdict("outdated", "Update the claim."), contradicting: ["e1", "unused"] },
+    evidence: [...evidence, unused],
+    model,
+  });
+  expect(change!.source).toBe("deterministic_revision");
+  expect(change!.citations).toEqual(["e1"]);
+});
+
 test("reviseChange uses validated model prose when it passes", async () => {
   const model = new MockModelProvider({ revision: [{ replacement: "A rival overtook Northwind in 2025.", citationEvidenceIds: ["e1"] }] });
   const change = await reviseChange({ claim, verdict: verdict("outdated", "Update the claim."), evidence, model });
@@ -185,6 +250,7 @@ test("a matching grounded numeric trace can ground a citation-free correction", 
   expect(change!.source).toBe("revision_agent");
   expect(change!.replacement).toBe("The verified percent change is 25%.");
   expect(change!.citations).toEqual([]);
+  expect(change!.numericCheckClaimId).toBe("c1");
 });
 
 test("deterministic numeric fallback preserves a decimal computed result", async () => {
@@ -196,6 +262,7 @@ test("deterministic numeric fallback preserves a decimal computed result", async
   const change = await reviseChange({ claim, verdict: { ...verdict("contradicted", "Correct the percentage."), supporting: [], contradicting: [] }, evidence: [], numeric, model });
   expect(change!.source).toBe("deterministic_revision");
   expect(change!.replacement).toBe("The verified percent change is 25.5%.");
+  expect(change!.numericCheckClaimId).toBe("c1");
 });
 
 test("deterministic disputed fallback presents both evidence sides", async () => {

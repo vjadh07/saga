@@ -6,7 +6,7 @@
 // plan's support target or budget is reached.
 import { z } from "zod";
 import { hashId, normalizeText } from "../text.js";
-import { retrieveSources } from "./retrieve.js";
+import { retrieveSources, type RetrievedSource, type RetrievalError } from "./retrieve.js";
 import type { ResearchPlan } from "./plan.js";
 import type { ModelProvider } from "../providers/model.js";
 import type { PageFetcher } from "../providers/fetch.js";
@@ -21,7 +21,7 @@ const AssessSchema = z.object({
   reasoning: z.string(),
 });
 
-const ReviseSchema = z.object({ queries: z.array(z.string().min(3)).min(1).max(4) });
+const ReviseSchema = z.object({ queries: z.array(z.string().trim().min(3)).min(1).max(4) });
 
 const INVESTIGATOR_PROMPT = `You are the Investigator for Saga, an evidence-auditing agent. You are given one claim and the sanitized text of one source. Decide, using only the provided text:
 - relevant: does this source actually address the exact claim (same entity, metric, period, place)?
@@ -42,6 +42,9 @@ export interface InvestigatorInput {
   search: SearchProvider;
   fetcher: PageFetcher;
   model: ModelProvider;
+  onSearch?: (query: string) => void;
+  onRetrieved?: (source: RetrievedSource) => void;
+  onError?: (error: RetrievalError) => void;
 }
 
 export interface InvestigatorResult {
@@ -50,7 +53,7 @@ export interface InvestigatorResult {
   safety: SafetyEvent[];
   sourcesExamined: Source[];
   queriesUsed: string[];
-  errors: Array<{ url: string; error: string }>;
+  errors: RetrievalError[];
 }
 
 export async function investigateClaim(input: InvestigatorInput): Promise<InvestigatorResult> {
@@ -63,19 +66,27 @@ export async function investigateClaim(input: InvestigatorInput): Promise<Invest
     queriesUsed: [],
     errors: [],
   };
-  const seen = new Set<string>();
+  const seen = new Map<string, Source>();
   let queries = plan.supportingQueries;
 
   for (let iter = 0; iter < plan.maximumIterations; iter++) {
     result.queriesUsed.push(...queries);
-    const { sources, errors } = await retrieveSources({ queries, search, fetcher, maxSources: plan.maximumSources });
+    const { sources, errors } = await retrieveSources({
+      queries, search, fetcher, maxSources: plan.maximumSources,
+      claimId: claim.id, agent: "investigator",
+      onSearch: input.onSearch, onRetrieved: input.onRetrieved, onError: input.onError,
+    });
     result.errors.push(...errors);
 
     for (const rs of sources) {
-      if (seen.has(rs.source.id)) continue;
-      seen.add(rs.source.id);
-      result.sourcesExamined.push(rs.source);
       result.safety.push(...rs.safety);
+      const existing = seen.get(rs.source.id);
+      if (existing) {
+        if (rs.source.retrievals?.length) existing.retrievals = [...(existing.retrievals ?? []), ...rs.source.retrievals];
+        continue;
+      }
+      seen.set(rs.source.id, rs.source);
+      result.sourcesExamined.push(rs.source);
 
       const assessment = await model.generateStructured({
         purpose: "investigator_assess",

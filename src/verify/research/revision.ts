@@ -171,7 +171,7 @@ export interface ValidateRevisionInput {
   numeric?: NumericCheck | null;
 }
 
-export function validateRevision(input: ValidateRevisionInput): { ok: boolean; reason: string; citations: string[] } {
+export function validateRevision(input: ValidateRevisionInput): { ok: boolean; reason: string; citations: string[]; numericGroundingUsed?: boolean } {
   const citations = [...input.citationIds];
   if (new Set(citations).size !== citations.length) {
     return { ok: false, reason: "duplicate citation id", citations: [] };
@@ -215,6 +215,7 @@ export function validateRevision(input: ValidateRevisionInput): { ok: boolean; r
   }
 
   const matchedEvidenceIds = new Set<string>();
+  let numericGroundingUsed = false;
   for (const sentence of sentences) {
     let sentenceGrounded = false;
     for (const id of citations) {
@@ -224,10 +225,19 @@ export function validateRevision(input: ValidateRevisionInput): { ok: boolean; r
       matchedEvidenceIds.add(id);
       sentenceGrounded = true;
     }
-    if (usableNumericText && matchesGrounding(sentence, usableNumericText)) sentenceGrounded = true;
+    if (usableNumericText && matchesGrounding(sentence, usableNumericText)) {
+      numericGroundingUsed = true;
+      sentenceGrounded = true;
+    }
     if (!sentenceGrounded) {
       return { ok: false, reason: "factual tokens are unsupported or occur in a different order than the cited grounding", citations };
     }
+  }
+
+  const numericEvidenceIdsUsed = numericGroundingUsed ? new Set(numericSourceIds) : new Set<string>();
+  const unusedCitation = citations.find((id) => !matchedEvidenceIds.has(id) && !numericEvidenceIdsUsed.has(id));
+  if (unusedCitation) {
+    return { ok: false, reason: `unused citation ${unusedCitation} did not ground the replacement prose`, citations: [] };
   }
 
   const matchedEvidence = [...matchedEvidenceIds].map((id) => evidenceById.get(id)!);
@@ -248,7 +258,7 @@ export function validateRevision(input: ValidateRevisionInput): { ok: boolean; r
     if (!hasSupport || !hasContradiction) return { ok: false, reason: "a disputed revision must present both evidence sides", citations };
   }
 
-  return { ok: true, reason: "", citations };
+  return { ok: true, reason: "", citations, numericGroundingUsed };
 }
 
 const PROMPT = `You are the Revision Agent for Saga. Replace one audited sentence with finished, accurate prose grounded only in the supplied evidence and deterministic numeric trace.
@@ -305,6 +315,7 @@ function deterministicRevision(claim: Claim, verdict: Verdict, evidence: Evidenc
 
   let replacement = "";
   let citations: string[] = [];
+  let numericCheckClaimId: string | undefined;
   if (verdict.claimId === claim.id && verdict.verdict === "disputed" && support && contradiction) {
     replacement = `${support.text} ${contradiction.text}`;
     citations = [support.evidence.id, contradiction.evidence.id];
@@ -327,6 +338,8 @@ function deterministicRevision(claim: Claim, verdict: Verdict, evidence: Evidenc
     if (!validation.ok) {
       replacement = "";
       citations = [];
+    } else if (validation.numericGroundingUsed) {
+      numericCheckClaimId = numeric?.claimId;
     }
   }
   return {
@@ -337,6 +350,7 @@ function deterministicRevision(claim: Claim, verdict: Verdict, evidence: Evidenc
     note: verdict.requiredCorrection ?? "The claim requires revision.",
     citations,
     source: "deterministic_revision",
+    ...(numericCheckClaimId ? { numericCheckClaimId } : {}),
   };
 }
 
@@ -376,6 +390,7 @@ export async function reviseChange(input: { claim: Claim; verdict: Verdict; evid
       note: verdict.requiredCorrection,
       citations: validation.citations,
       source: "revision_agent",
+      ...(validation.numericGroundingUsed ? { numericCheckClaimId: numeric?.claimId } : {}),
     };
   } catch {
     return fallback();

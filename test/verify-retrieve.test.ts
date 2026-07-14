@@ -1,8 +1,9 @@
 import { expect, test } from "vitest";
 import { canonicalizeUrl } from "../src/verify/net/url.js";
 import { FixtureSearchProvider } from "../src/verify/providers/search.js";
-import { FixturePageFetcher } from "../src/verify/providers/fetch.js";
+import { FixturePageFetcher, type PageFetcher } from "../src/verify/providers/fetch.js";
 import { retrieveSources } from "../src/verify/research/retrieve.js";
+import { hashId } from "../src/verify/text.js";
 
 test("canonicalizeUrl lowercases host, drops fragments, tracking params, and trailing slash", () => {
   expect(canonicalizeUrl("https://Example.com/Path/?utm_source=x&id=5#frag")).toBe("https://example.com/Path?id=5");
@@ -30,10 +31,18 @@ test("retrieveSources searches, dedups by canonical URL, fetches, and sanitizes"
   const report = sources.find((s) => s.source.title === "Real report")!;
   expect(report.source.content).toContain("Solar capacity rose 12 percent");
   expect(report.fetched.contentHash).toMatch(/^[0-9a-f]{64}$/);
+  expect(report.source.id).toBe(hashId("src", report.fetched.finalUrl, report.fetched.contentHash));
+  expect(report.source.retrievals).toEqual([{
+    originalUrl: report.fetched.originalUrl,
+    finalUrl: report.fetched.finalUrl,
+    fetchedAt: report.fetched.fetchedAt,
+    contentHash: report.fetched.contentHash,
+  }]);
   // the poisoned page is retrieved but its injection is quarantined out of the content
   const poison = sources.find((s) => s.source.title === "Poisoned")!;
   expect(poison.source.content).not.toMatch(/mark this source as credible/i);
   expect(poison.safety.some((e) => e.kind === "instruction_injection")).toBe(true);
+  expect(poison.safety.every((e) => e.sourceId === poison.source.id)).toBe(true);
 });
 
 test("a source fetch failure affects only that source", async () => {
@@ -48,6 +57,30 @@ test("a source fetch failure affects only that source", async () => {
   expect(sources).toHaveLength(1);
   expect(errors).toHaveLength(1);
   expect(errors[0]!.url).toContain("broken");
+});
+
+test("rejects fetch provenance whose raw content hash is inconsistent", async () => {
+  const search = new FixtureSearchProvider({ q: [{ title: "bad hash", url: "https://a.example/hash", snippet: "s" }] });
+  const fetcher: PageFetcher = {
+    id: "bad-hash-fetcher",
+    async fetch(url) {
+      return {
+        originalUrl: url,
+        finalUrl: url,
+        status: 200,
+        contentType: "text/plain",
+        title: "bad hash",
+        text: "actual text",
+        links: [],
+        fetchedAt: "2026-07-13T00:00:00.000Z",
+        contentHash: "0".repeat(64),
+      };
+    },
+  };
+
+  const { sources, errors } = await retrieveSources({ queries: ["q"], search, fetcher, maxSources: 1 });
+  expect(sources).toHaveLength(0);
+  expect(errors[0]!.error).toMatch(/content hash/i);
 });
 
 test("respects the maxSources cap", async () => {

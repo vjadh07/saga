@@ -14,6 +14,7 @@ import { evaluateContract } from "../research/contract-eval.js";
 import { resolveContradiction } from "../research/conflict.js";
 import { verifyNumericClaim } from "../research/numeric.js";
 import { groundedArbitrate } from "../research/arbiter-grounded.js";
+import type { RetrievedSource, RetrievalError } from "../research/retrieve.js";
 import { detectLineage } from "../lineage.js";
 import { assessTemporal, temporalScope } from "../temporal.js";
 import { citedSources } from "../corpus.js";
@@ -36,6 +37,25 @@ import type {
   Verdict,
 } from "../types.js";
 
+export interface LiveClaimError {
+  agent: "investigator" | "skeptic" | "pipeline";
+  operation: "search" | "search_result" | "fetch" | "claim";
+  query: string | null;
+  url: string | null;
+  error: string;
+}
+
+export interface LiveClaimTrace {
+  executedSearches: Array<{ agent: "investigator" | "skeptic"; query: string }>;
+  sourcesExamined: Source[];
+  safety: SafetyEvent[];
+  errors: LiveClaimError[];
+}
+
+export function createLiveClaimTrace(): LiveClaimTrace {
+  return { executedSearches: [], sourcesExamined: [], safety: [], errors: [] };
+}
+
 export interface LiveClaimAudit {
   claim: Claim;
   contract: EvidenceContract;
@@ -48,8 +68,9 @@ export interface LiveClaimAudit {
   numeric: NumericCheck | null;
   conflict: ConflictAnalysis;
   verdict: Verdict;
+  executedSearches: Array<{ agent: "investigator" | "skeptic"; query: string }>;
   safety: SafetyEvent[];
-  errors: Array<{ url: string; error: string }>;
+  errors: LiveClaimError[];
 }
 
 export interface AuditClaimInput {
@@ -59,12 +80,27 @@ export interface AuditClaimInput {
   search: SearchProvider;
   fetcher: PageFetcher;
   now: string;
+  trace?: LiveClaimTrace;
   emit?: (type: FlightEventType, detail: Record<string, unknown>) => void;
 }
 
 export async function auditClaim(input: AuditClaimInput): Promise<LiveClaimAudit> {
   const { claim, mode, model, search, fetcher, now } = input;
   const emit = input.emit ?? (() => {});
+  const trace = input.trace ?? createLiveClaimTrace();
+  const hooks = (agent: "investigator" | "skeptic") => ({
+    onSearch(query: string): void {
+      trace.executedSearches.push({ agent, query });
+      emit("QUERY_EXECUTED", { claimId: claim.id, agent, query });
+    },
+    onRetrieved(retrieved: RetrievedSource): void {
+      trace.sourcesExamined.push(structuredClone(retrieved.source));
+      trace.safety.push(...retrieved.safety);
+    },
+    onError(error: RetrievalError): void {
+      trace.errors.push({ agent, operation: error.operation, query: error.query, url: error.url, error: error.error });
+    },
+  });
   const contract = defaultContract(claim);
   emit("CONTRACT_DEFINED", { claimId: claim.id, primaryRequired: contract.primaryRequired });
 
@@ -85,21 +121,20 @@ export async function auditClaim(input: AuditClaimInput): Promise<LiveClaimAudit
   const plan = await planResearch({ claim, contract, mode, model });
 
   // 2. independent Investigator and Skeptic
-  const inv = await investigateClaim({ claim, plan, search, fetcher, model });
-  emit("QUERY_EXECUTED", { claimId: claim.id, agent: "investigator", found: inv.evidence.length });
-  const skep = await skepticResearch({ claim, plan, search, fetcher, model });
-  emit("QUERY_EXECUTED", { claimId: claim.id, agent: "skeptic", found: skep.evidence.length });
+  const inv = await investigateClaim({ claim, plan, search, fetcher, model, ...hooks("investigator") });
+  const skep = await skepticResearch({ claim, plan, search, fetcher, model, ...hooks("skeptic") });
+  const executedSearches = trace.executedSearches;
 
-  const safety = [...inv.safety, ...skep.safety];
+  const safety = trace.safety;
   for (const s of safety) if (s.action === "quarantined") emit("INJECTION_QUARANTINED", { claimId: claim.id, sourceId: s.sourceId, kind: s.kind });
-  const errors = [...inv.errors, ...skep.errors];
+  const errors = trace.errors;
 
   // if nothing at all could be retrieved, this claim's research failed
   const examined = dedupeSources([...inv.sourcesExamined, ...skep.sourcesExamined]);
   if (examined.length === 0) {
     const verdict = groundedArbitrate({ claim, contractEvaluation: emptyContractEval(claim.id), temporal: emptyTemporal, numeric: null, conflict: noConflict, evidence: [], supportOrigins: 0, contraOrigins: 0, researchFailed: true });
     emit("VERDICT_REACHED", { claimId: claim.id, verdict: verdict.verdict, confidence: verdict.confidence });
-    return baseAudit(claim, contract, plan, verdict, emptyTemporal, noConflict, emptyContractEval(claim.id), [], examined, safety, errors, null);
+    return baseAudit(claim, contract, plan, verdict, emptyTemporal, noConflict, emptyContractEval(claim.id), [], examined, safety, errors, null, executedSearches);
   }
 
   // 3. source-quality gate
@@ -172,16 +207,23 @@ export async function auditClaim(input: AuditClaimInput): Promise<LiveClaimAudit
 
   return {
     claim, contract, plan, evidence: validated, sourceQuality: quality, sourcesExamined: examined,
-    contractEvaluation, temporal, numeric, conflict, verdict, safety, errors,
+    contractEvaluation, temporal, numeric, conflict, verdict, executedSearches, safety, errors,
   };
 }
 
 function dedupeSources(sources: Source[]): Source[] {
-  const seen = new Set<string>();
+  const seen = new Map<string, Source>();
   const out: Source[] = [];
   for (const s of sources) {
-    if (seen.has(s.id)) continue;
-    seen.add(s.id);
+    const existing = seen.get(s.id);
+    if (existing) {
+      if (s === existing) continue;
+      if (s.retrievals?.length) {
+        existing.retrievals = [...(existing.retrievals ?? []), ...s.retrievals];
+      }
+      continue;
+    }
+    seen.set(s.id, s);
     out.push(s);
   }
   return out;
@@ -194,7 +236,8 @@ function emptyContractEval(claimId: string): ContractEvaluation {
 function baseAudit(
   claim: Claim, contract: EvidenceContract, plan: ResearchPlan | null, verdict: Verdict,
   temporal: TemporalAssessment, conflict: ConflictAnalysis, contractEvaluation: ContractEvaluation,
-  evidence: Evidence[], sourcesExamined: Source[], safety: SafetyEvent[], errors: Array<{ url: string; error: string }>, numeric: NumericCheck | null,
+  evidence: Evidence[], sourcesExamined: Source[], safety: SafetyEvent[], errors: LiveClaimError[], numeric: NumericCheck | null,
+  executedSearches: LiveClaimAudit["executedSearches"] = [],
 ): LiveClaimAudit {
-  return { claim, contract, plan, evidence, sourceQuality: [], sourcesExamined, contractEvaluation, temporal, numeric, conflict, verdict, safety, errors };
+  return { claim, contract, plan, evidence, sourceQuality: [], sourcesExamined, contractEvaluation, temporal, numeric, conflict, verdict, executedSearches, safety, errors };
 }

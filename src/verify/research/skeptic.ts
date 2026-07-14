@@ -5,7 +5,7 @@
 // verbatim, exactly like the Investigator.
 import { z } from "zod";
 import { hashId, normalizeText } from "../text.js";
-import { retrieveSources } from "./retrieve.js";
+import { retrieveSources, type RetrievedSource, type RetrievalError } from "./retrieve.js";
 import type { ResearchPlan } from "./plan.js";
 import type { ModelProvider } from "../providers/model.js";
 import type { PageFetcher } from "../providers/fetch.js";
@@ -20,7 +20,7 @@ const AssessSchema = z.object({
   reasoning: z.string(),
 });
 
-const ReviseSchema = z.object({ queries: z.array(z.string().min(3)).min(1).max(4) });
+const ReviseSchema = z.object({ queries: z.array(z.string().trim().min(3)).min(1).max(4) });
 
 const SKEPTIC_PROMPT = `You are the Skeptic for Saga, an evidence-auditing agent. Your job is to challenge one claim, not confirm it. Given the claim and the sanitized text of one source, decide using only the provided text:
 - relevant: does this source address the exact claim (same entity, metric, period, place)?
@@ -40,6 +40,9 @@ export interface SkepticInput {
   search: SearchProvider;
   fetcher: PageFetcher;
   model: ModelProvider;
+  onSearch?: (query: string) => void;
+  onRetrieved?: (source: RetrievedSource) => void;
+  onError?: (error: RetrievalError) => void;
 }
 
 export interface SkepticResult {
@@ -48,7 +51,7 @@ export interface SkepticResult {
   safety: SafetyEvent[];
   sourcesExamined: Source[];
   queriesUsed: string[];
-  errors: Array<{ url: string; error: string }>;
+  errors: RetrievalError[];
 }
 
 export async function skepticResearch(input: SkepticInput): Promise<SkepticResult> {
@@ -61,19 +64,27 @@ export async function skepticResearch(input: SkepticInput): Promise<SkepticResul
     queriesUsed: [],
     errors: [],
   };
-  const seen = new Set<string>();
+  const seen = new Map<string, Source>();
   let queries = plan.skepticQueries;
 
   for (let iter = 0; iter < plan.maximumIterations; iter++) {
     result.queriesUsed.push(...queries);
-    const { sources, errors } = await retrieveSources({ queries, search, fetcher, maxSources: plan.maximumSources });
+    const { sources, errors } = await retrieveSources({
+      queries, search, fetcher, maxSources: plan.maximumSources,
+      claimId: claim.id, agent: "skeptic",
+      onSearch: input.onSearch, onRetrieved: input.onRetrieved, onError: input.onError,
+    });
     result.errors.push(...errors);
 
     for (const rs of sources) {
-      if (seen.has(rs.source.id)) continue;
-      seen.add(rs.source.id);
-      result.sourcesExamined.push(rs.source);
       result.safety.push(...rs.safety);
+      const existing = seen.get(rs.source.id);
+      if (existing) {
+        if (rs.source.retrievals?.length) existing.retrievals = [...(existing.retrievals ?? []), ...rs.source.retrievals];
+        continue;
+      }
+      seen.set(rs.source.id, rs.source);
+      result.sourcesExamined.push(rs.source);
 
       const a = await model.generateStructured({
         purpose: "skeptic_assess",

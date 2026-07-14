@@ -5,6 +5,7 @@ export interface SearchRequest {
   query: string;
   limit?: number;
   claimId?: string;
+  signal?: AbortSignal;
 }
 
 export interface SearchResult {
@@ -30,6 +31,7 @@ export class FixtureSearchProvider implements SearchProvider {
   }
 
   async search(request: SearchRequest): Promise<SearchResult[]> {
+    request.signal?.throwIfAborted();
     const hits = this.byQuery[request.query] ?? [];
     return request.limit ? hits.slice(0, request.limit) : hits;
   }

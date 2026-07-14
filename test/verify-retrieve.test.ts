@@ -93,3 +93,41 @@ test("respects the maxSources cap", async () => {
   const { sources } = await retrieveSources({ queries: ["q"], search, fetcher, maxSources: 3 });
   expect(sources).toHaveLength(3);
 });
+
+test("Live retrieval rejects fixture labels at provider boundaries", async () => {
+  const labeledSearch = {
+    id: "bad-search",
+    async search() {
+      return [{ title: "labeled", url: "https://a.example/labeled", snippet: "s", stance: "supports" }];
+    },
+  };
+  await expect(retrieveSources({
+    queries: ["q"],
+    search: labeledSearch,
+    fetcher: new FixturePageFetcher(),
+    maxSources: 1,
+  })).rejects.toThrow(/fixture-labeled/i);
+
+  const labeledPage = {
+    id: "bad-page",
+    async fetch(url: string) {
+      return {
+        originalUrl: url,
+        finalUrl: url,
+        status: 200,
+        contentType: "text/plain",
+        title: "labeled",
+        text: "content",
+        links: [],
+        fetchedAt: "2026-07-14T00:00:00.000Z",
+        contentHash: hashId("", "content").slice(0, 64),
+        relevance: "strong",
+      };
+    },
+  };
+  const cleanSearch = new FixtureSearchProvider({
+    q: [{ title: "page", url: "https://a.example/page", snippet: "s" }],
+  });
+  await expect(retrieveSources({ queries: ["q"], search: cleanSearch, fetcher: labeledPage, maxSources: 1 }))
+    .rejects.toThrow(/fixture-labeled/i);
+});

@@ -11,6 +11,22 @@ import {
   type RiskLevel,
 } from "../types.js";
 import { hashId } from "../text.js";
+import { z } from "zod";
+import type { ModelProvider } from "../providers/model.js";
+
+const RawClaimSchema = z.object({
+  originalText: z.string().min(1),
+  normalized: z.string(),
+  claimType: z.enum(CLAIM_TYPES),
+  verifiable: z.boolean(),
+  timeSensitive: z.boolean(),
+  risk: z.enum(RISK_LEVELS),
+  asOf: z.string().nullable().optional(),
+}).strict();
+
+const ClaimMapOutputSchema = z.object({
+  claims: z.array(RawClaimSchema).max(50),
+}).strict();
 
 export interface RawClaim {
   originalText: string; // verbatim span from the document
@@ -32,9 +48,12 @@ function coerceRisk(r: unknown): RiskLevel {
 // Deterministic assembly of raw extractions into validated, located, deduped claims.
 export function assembleClaims(document: string, raw: RawClaim[]): Claim[] {
   const byId = new Map<string, Claim>();
+  const occupied: Array<{ start: number; end: number }> = [];
   for (const r of raw) {
     const start = document.indexOf(r.originalText);
     if (start < 0) continue; // not present verbatim: cannot be located or corrected, drop it
+    const end = start + r.originalText.length;
+    if (occupied.some((span) => start < span.end && end > span.start)) continue;
     const id = hashId("claim", r.normalized || r.originalText);
     if (byId.has(id)) continue;
     byId.set(id, {
@@ -42,18 +61,29 @@ export function assembleClaims(document: string, raw: RawClaim[]): Claim[] {
       originalText: r.originalText,
       normalized: r.normalized || r.originalText.toLowerCase(),
       claimType: coerceType(r.claimType),
-      location: { start, end: start + r.originalText.length },
+      location: { start, end },
       verifiable: Boolean(r.verifiable),
       timeSensitive: Boolean(r.timeSensitive),
       risk: coerceRisk(r.risk),
       status: "contracted",
       asOf: r.asOf ?? null,
     });
+    occupied.push({ start, end });
   }
   return [...byId.values()].sort((a, b) => a.location.start - b.location.start);
 }
 
-export const MAPPER_PROMPT = `You are the Claim Mapper for Saga, an evidence-auditing agent. Break the user's document into atomic, independently verifiable claims. Report each claim by calling record_claim exactly once per claim.
+export async function mapClaimsWithModel(document: string, model: ModelProvider): Promise<Claim[]> {
+  const output = await model.generateStructured({
+    purpose: "claim_mapper",
+    system: MAPPER_PROMPT,
+    prompt: `Document to map exactly as provided:\n\n${document}`,
+    schema: ClaimMapOutputSchema,
+  });
+  return assembleClaims(document, output.claims);
+}
+
+export const MAPPER_PROMPT = `You are the Claim Mapper for Saga, an evidence-auditing agent. Break the user's document into atomic, independently verifiable claims.
 
 Rules:
 - One factual assertion per claim. Never combine two assertions.

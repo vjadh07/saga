@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import { ClaimSchema } from "../src/verify/types.js";
-import { assembleClaims, type RawClaim } from "../src/verify/agent/mapper.js";
+import { MockModelProvider } from "../src/verify/providers/model.js";
+import { assembleClaims, mapClaimsWithModel, type RawClaim } from "../src/verify/agent/mapper.js";
 
 const DOC = "The bridge opened in 1998. It is the longest in the region. We think it is beautiful.";
 
@@ -50,4 +51,35 @@ test("duplicate extractions collapse to one claim", () => {
     { originalText: "The bridge opened in 1998.", normalized: "the bridge opened in 1998", claimType: "event", verifiable: true, timeSensitive: false, risk: "low" },
   ];
   expect(assembleClaims(DOC, raw)).toHaveLength(1);
+});
+
+test("different model normalizations cannot create overlapping claim spans", () => {
+  const raw: RawClaim[] = [
+    { originalText: "The bridge opened in 1998.", normalized: "bridge opened 1998", claimType: "event", verifiable: true, timeSensitive: false, risk: "low" },
+    { originalText: "The bridge opened in 1998.", normalized: "opening date of bridge", claimType: "event", verifiable: true, timeSensitive: false, risk: "low" },
+  ];
+
+  const claims = assembleClaims(DOC, raw);
+  expect(claims).toHaveLength(1);
+  expect(claims[0]!.normalized).toBe("bridge opened 1998");
+});
+
+test("mapClaimsWithModel validates structured output then assembles exact document spans", async () => {
+  const model = new MockModelProvider({
+    claim_mapper: [{ claims: [
+      { originalText: "The bridge opened in 1998.", normalized: "the bridge opened in 1998", claimType: "event", verifiable: true, timeSensitive: false, risk: "medium", asOf: null },
+      { originalText: "A sentence the document never contained.", normalized: "invented", claimType: "general", verifiable: true, timeSensitive: false, risk: "low", asOf: null },
+    ] }],
+  });
+  const claims = await mapClaimsWithModel(DOC, model);
+  expect(claims).toHaveLength(1);
+  expect(claims[0]!.originalText).toBe("The bridge opened in 1998.");
+  expect(DOC.slice(claims[0]!.location.start, claims[0]!.location.end)).toBe(claims[0]!.originalText);
+});
+
+test("mapClaimsWithModel rejects invalid model fields at the schema boundary", async () => {
+  const model = new MockModelProvider({
+    claim_mapper: [{ claims: [{ originalText: "The bridge opened in 1998.", normalized: "opened", claimType: "made_up", verifiable: true, timeSensitive: false, risk: "low" }] }],
+  });
+  await expect(mapClaimsWithModel(DOC, model)).rejects.toThrow();
 });

@@ -18,7 +18,7 @@ export interface FetchedPage {
 
 export interface PageFetcher {
   readonly id: string;
-  fetch(url: string): Promise<FetchedPage>;
+  fetch(url: string, context?: { signal?: AbortSignal }): Promise<FetchedPage>;
 }
 
 export interface FixturePage {
@@ -41,7 +41,8 @@ export class FixturePageFetcher implements PageFetcher {
     this.now = now;
   }
 
-  async fetch(url: string): Promise<FetchedPage> {
+  async fetch(url: string, context: { signal?: AbortSignal } = {}): Promise<FetchedPage> {
+    context.signal?.throwIfAborted();
     const p = this.pages[url];
     if (!p) throw new Error(`no fixture page for ${url}`);
     return {

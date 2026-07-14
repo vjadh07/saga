@@ -8,14 +8,15 @@ import { reviseChange } from "../research/revision.js";
 import { buildPassport } from "../passport.js";
 import { buildReceipt, type AuditReceipt } from "../receipt.js";
 import { detectLineage } from "../lineage.js";
-import { citedSources } from "../corpus.js";
+import { citedSources } from "../sources.js";
 import { sha256hex } from "../text.js";
+import type { LiveAuditStage } from "./stages.js";
+import { AuditResources, type AuditMetrics, type AuditResourceOptions } from "./resources.js";
 import type { AuditMode } from "../mapview.js";
 import type { ModelProvider } from "../providers/model.js";
 import type { PageFetcher } from "../providers/fetch.js";
 import type { SearchProvider } from "../providers/search.js";
 import type { Recorder } from "../recorder.js";
-import type { ExecutionMode } from "../mode.js";
 import type {
   Claim,
   ClaimDependency,
@@ -24,6 +25,8 @@ import type {
   Evidence,
   FlightEvent,
   FlightEventType,
+  LineageReport,
+  SafetyEvent,
   Source,
   TrustPassport,
 } from "../types.js";
@@ -39,26 +42,36 @@ export interface LiveAuditInput {
   now: string;
   recorder?: Recorder;
   onEvent?: (e: FlightEvent) => void;
+  signal?: AbortSignal;
+  onStage?: (stage: LiveAuditStage, claimId: string) => void | Promise<void>;
+  resourceOptions?: Omit<AuditResourceOptions, "signal">;
 }
 
 export interface LiveAuditResult {
   auditId: string;
-  mode: ExecutionMode;
+  mode: "live";
   document: string;
   claimAudits: LiveClaimAudit[];
   dependencies: ClaimDependency[];
   reevaluation: Array<{ claimId: string; reason: string }>;
+  lineage: LineageReport;
+  safetyEvents: SafetyEvent[];
   passport: TrustPassport;
   correctedDraft: CorrectedDraft;
   receipt: AuditReceipt;
   flight: FlightEvent[];
+  metrics: AuditMetrics;
 }
 
 const FAILED_VERDICTS = new Set(["contradicted", "outdated", "insufficient_evidence", "failed"]);
 
 export async function runLiveAudit(input: LiveAuditInput): Promise<LiveAuditResult> {
-  const { auditId, document, claims, mode, model, search, fetcher, now, recorder } = input;
+  const { auditId, document, claims, mode, now, recorder } = input;
   const startedAt = now;
+  input.signal?.throwIfAborted();
+  const resources = new AuditResources(mode, { ...input.resourceOptions, signal: input.signal });
+  resources.checkClaimCount(claims.length);
+  const { model, search, fetcher } = resources.guard({ model: input.model, search: input.search, fetcher: input.fetcher });
 
   const flight: FlightEvent[] = [];
   let seq = 0;
@@ -74,10 +87,23 @@ export async function runLiveAudit(input: LiveAuditInput): Promise<LiveAuditResu
   // audit each claim with failure isolation
   const claimAudits: LiveClaimAudit[] = [];
   for (const claim of claims) {
+    input.signal?.throwIfAborted();
     const trace = createLiveClaimTrace();
     try {
-      claimAudits.push(await auditClaim({ claim, mode, model, search, fetcher, now, trace, emit: emitFor(claim.id) }));
+      claimAudits.push(await auditClaim({
+        claim,
+        mode,
+        model,
+        search,
+        fetcher,
+        now,
+        trace,
+        emit: emitFor(claim.id),
+        signal: input.signal,
+        onStage: input.onStage,
+      }));
     } catch (err) {
+      if (input.signal?.aborted) throw input.signal.reason ?? err;
       const rawMessage = err instanceof Error ? err.message : String(err);
       const message = rawMessage.trim() || "claim audit failed without an error message";
       claimAudits.push(failedClaimAudit(claim, message, trace));
@@ -95,11 +121,16 @@ export async function runLiveAudit(input: LiveAuditInput): Promise<LiveAuditResu
   const byId = collectSources(claimAudits);
   const citedAll = citedSources(allEvidence, byId);
   const primarySourceCount = new Set(citedAll.filter((s) => s.sourceType === "primary").map((s) => s.id)).size;
-  const independentOrigins = detectLineage(citedAll).independentOrigins;
+  const lineage = detectLineage(citedAll);
+  const independentOrigins = lineage.independentOrigins;
+  const safetyEvents = claimAudits.flatMap((audit) => audit.safety);
 
   const passport = buildPassport({ verdicts: claimAudits.map((a) => a.verdict), primarySourceCount, independentOrigins, now });
 
   // corrected draft through the Revision Agent, applied at claim offsets (original preserved)
+  input.signal?.throwIfAborted();
+  await input.onStage?.("generating_revision", "");
+  input.signal?.throwIfAborted();
   const changes: DraftChange[] = [];
   for (const a of claimAudits) {
     const change = await reviseChange({ claim: a.claim, verdict: a.verdict, evidence: a.evidence, numeric: a.numeric, model });
@@ -182,7 +213,7 @@ export async function runLiveAudit(input: LiveAuditInput): Promise<LiveAuditResu
       contradictingEvidenceIds: a.verdict.contradicting,
     })),
     revisions,
-    safetyEvents: claimAudits.flatMap((a) => a.safety),
+    safetyEvents,
     failures,
     approvedChangeIds: [],
     startedAt,
@@ -191,7 +222,22 @@ export async function runLiveAudit(input: LiveAuditInput): Promise<LiveAuditResu
 
   emit("AUDIT_COMPLETED", "", { documentStatus: passport.documentStatus, claimsRequiringRevision: passport.claimsRequiringRevision });
 
-  return { auditId, mode: "live", document, claimAudits, dependencies, reevaluation, passport, correctedDraft, receipt, flight };
+  const metrics = resources.snapshot();
+  return {
+    auditId,
+    mode: "live",
+    document,
+    claimAudits,
+    dependencies,
+    reevaluation,
+    lineage,
+    safetyEvents,
+    passport,
+    correctedDraft,
+    receipt,
+    flight,
+    metrics,
+  };
 }
 
 function collectSources(claimAudits: LiveClaimAudit[]): Map<string, Source> {

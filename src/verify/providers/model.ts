@@ -10,6 +10,7 @@ export interface StructuredModelRequest<T> {
   system: string;
   prompt: string;
   schema: z.ZodType<T>;
+  signal?: AbortSignal;
 }
 
 export interface ModelProvider {
@@ -29,6 +30,7 @@ export class MockModelProvider implements ModelProvider {
   }
 
   async generateStructured<T>(request: StructuredModelRequest<T>): Promise<T> {
+    request.signal?.throwIfAborted();
     const queue = this.scripts[request.purpose];
     if (!queue || queue.length === 0) {
       throw new Error(`no scripted response for purpose "${request.purpose}"`);

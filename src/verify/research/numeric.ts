@@ -193,11 +193,181 @@ interface NumberSpan {
   end: number;
 }
 
+interface QuantitySignature {
+  dimension: string;
+  unit: string;
+  scale: number;
+}
+
+const SCALE_VALUES: Readonly<Record<string, number>> = Object.freeze({
+  thousand: 1_000,
+  k: 1_000,
+  million: 1_000_000,
+  m: 1_000_000,
+  billion: 1_000_000_000,
+  b: 1_000_000_000,
+  trillion: 1_000_000_000_000,
+  t: 1_000_000_000_000,
+});
+
+const GENERIC_UNIT_STOP_WORDS = new Set([
+  "a", "an", "and", "as", "at", "by", "decrease", "decreased", "equals", "equal", "fell",
+  "from", "increase", "increased", "is", "of", "or", "out", "over", "percent", "percentage",
+  "rose", "the", "to", "was", "were",
+]);
+
+function canonicalGenericUnit(unit: string): string {
+  const lower = unit.toLocaleLowerCase("en-US");
+  if (lower === "people") return "person";
+  if (lower.length > 4 && lower.endsWith("ies")) return `${lower.slice(0, -3)}y`;
+  if (lower.length > 3 && lower.endsWith("s") && !lower.endsWith("ss")) return lower.slice(0, -1);
+  return lower;
+}
+
+function currencyPrefix(text: string): string | null {
+  const symbol = text.match(/([$€£¥])\s*$/)?.[1];
+  if (symbol === "$") return "usd";
+  if (symbol === "€") return "eur";
+  if (symbol === "£") return "gbp";
+  if (symbol === "¥") return "jpy";
+  const code = text.match(/\b(USD|EUR|GBP|JPY|CAD|AUD|CNY|INR)\s*$/i)?.[1];
+  return code?.toLocaleLowerCase("en-US") ?? null;
+}
+
+function magnitudeSuffix(after: string, hasCurrency: boolean): { scale: number; length: number } {
+  const word = after.match(/^\s*(thousand|million|billion|trillion)\b/i);
+  if (word) return { scale: SCALE_VALUES[word[1]!.toLocaleLowerCase("en-US")]!, length: word[0].length };
+
+  // A compact K/M/B/T suffix is a magnitude only when capitalized, or when a currency
+  // marker removes the common ambiguity between "m" for metres and "m" for million.
+  const compact = after.match(/^\s*([KMBT])\b/) ?? (hasCurrency ? after.match(/^\s*([kmbt])\b/i) : null);
+  if (!compact) return { scale: 1, length: 0 };
+  return { scale: SCALE_VALUES[compact[1]!.toLocaleLowerCase("en-US")]!, length: compact[0].length };
+}
+
+function suffixUnit(after: string): { dimension: string; unit: string } | null {
+  const currency = after.match(/^\s*(USD|EUR|GBP|JPY|CAD|AUD|CNY|INR|dollars?|euros?|pounds?\s+sterling|yen|yuan|rupees?)\b/i)?.[1];
+  if (currency) {
+    const normalized = currency.toLocaleLowerCase("en-US");
+    const unit = normalized.startsWith("dollar") || normalized === "usd" ? "usd"
+      : normalized.startsWith("euro") || normalized === "eur" ? "eur"
+        : normalized.startsWith("pound") || normalized === "gbp" ? "gbp"
+          : normalized === "yuan" || normalized === "cny" ? "cny"
+            : normalized.startsWith("rupee") || normalized === "inr" ? "inr"
+              : normalized === "cad" || normalized === "aud" ? normalized : "jpy";
+    return { dimension: "currency", unit };
+  }
+
+  const known: Array<[RegExp, string, string]> = [
+    [/^\s*(?:kilograms?|kg)\b/i, "mass", "kg"],
+    [/^\s*(?:milligrams?|mg)\b/i, "mass", "mg"],
+    [/^\s*(?:grams?|g)\b/i, "mass", "g"],
+    [/^\s*(?:pounds?|lbs?)\b/i, "mass", "lb"],
+    [/^\s*(?:ounces?|oz)\b/i, "mass", "oz"],
+    [/^\s*(?:kilomet(?:er|re)s?|km)\b/i, "length", "km"],
+    [/^\s*(?:centimet(?:er|re)s?|cm)\b/i, "length", "cm"],
+    [/^\s*(?:millimet(?:er|re)s?|mm)\b/i, "length", "mm"],
+    [/^\s*(?:met(?:er|re)s?|m)\b/i, "length", "m"],
+    [/^\s*(?:miles?|mi)\b/i, "length", "mile"],
+    [/^\s*(?:feet|foot|ft)\b/i, "length", "foot"],
+    [/^\s*(?:inches?|in)\b/i, "length", "inch"],
+    [/^\s*(?:yards?|yd)\b/i, "length", "yard"],
+    [/^\s*(?:lit(?:er|re)s?|l)\b/i, "volume", "l"],
+    [/^\s*(?:millilit(?:er|re)s?|ml)\b/i, "volume", "ml"],
+    [/^\s*(?:years?|months?|weeks?|days?|hours?|minutes?|seconds?|ms)\b/i, "time", "time"],
+    [/^\s*(?:%|percent(?:age)?)\b/i, "percentage", "percent"],
+  ];
+  for (const [pattern, dimension, unit] of known) {
+    if (pattern.test(after)) return { dimension, unit };
+  }
+
+  const generic = after.match(/^\s*([A-Za-z][A-Za-z-]*)\b/)?.[1];
+  if (!generic) return null;
+  const unit = canonicalGenericUnit(generic);
+  if (GENERIC_UNIT_STOP_WORDS.has(unit)) return null;
+  return { dimension: "count", unit };
+}
+
+function quantitySignature(text: string, span: NumberSpan): QuantitySignature | null {
+  const before = text.slice(Math.max(0, span.start - 24), span.start);
+  const after = text.slice(span.end, Math.min(text.length, span.end + 48));
+  const prefixCurrency = currencyPrefix(before);
+  const magnitude = magnitudeSuffix(after, prefixCurrency !== null);
+  const suffix = suffixUnit(after.slice(magnitude.length));
+
+  if (prefixCurrency) return { dimension: "currency", unit: prefixCurrency, scale: magnitude.scale };
+  if (suffix) return { ...suffix, scale: magnitude.scale };
+  if (magnitude.scale !== 1) return { dimension: "scaled_quantity", unit: "quantity", scale: magnitude.scale };
+  return null;
+}
+
+function compatibleQuantities(left: QuantitySignature | null, right: QuantitySignature | null): boolean {
+  if (left === null || right === null) return left === right;
+  return left.dimension === right.dimension && left.unit === right.unit && left.scale === right.scale;
+}
+
 function numberSpans(text: string): NumberSpan[] {
   const pattern = /[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[eE][-+]?\d+)?/g;
   return [...text.matchAll(pattern)]
     .map((match) => ({ value: Number(match[0].replace(/,/g, "")), start: match.index, end: match.index + match[0].length }))
     .filter((span) => Number.isFinite(span.value));
+}
+
+function fromToDimensionsVerified(text: string, from: number, to: number): boolean {
+  for (const segment of sentenceSegments(text)) {
+    for (const match of segment.matchAll(/\bfrom\b(.{0,80}?)\bto\b(.{0,80})/gi)) {
+      const beforeTo = numberSpans(match[1] ?? "");
+      const afterTo = numberSpans(match[2] ?? "");
+      const left = beforeTo.at(-1);
+      const right = afterTo[0];
+      if (left?.value !== from || right?.value !== to) continue;
+      return compatibleQuantities(quantitySignature(match[1] ?? "", left), quantitySignature(match[2] ?? "", right));
+    }
+  }
+  return false;
+}
+
+function orderedPairDimensionsVerified(text: string, first: number, second: number, separator: RegExp): boolean {
+  const spans = numberSpans(text);
+  for (let i = 0; i + 1 < spans.length; i++) {
+    const left = spans[i]!;
+    const right = spans[i + 1]!;
+    if (left.value !== first || right.value !== second) continue;
+    if (!separator.test(text.slice(left.end, right.start))) continue;
+    return compatibleQuantities(quantitySignature(text, left), quantitySignature(text, right));
+  }
+  return false;
+}
+
+function aggregateQuantitiesVerified(operandsText: string, resultText: string, inputs: Record<string, number>, claimedResult: number): boolean {
+  const operands = numberSpans(operandsText);
+  const result = numberSpans(resultText).find((span) => span.value === claimedResult);
+  if (!result || !sameNumbers(operands.map((span) => span.value), Object.values(inputs))) return false;
+  const signatures = operands.map((span) => quantitySignature(operandsText, span));
+  signatures.push(quantitySignature(resultText, result));
+  return signatures.every((signature) => compatibleQuantities(signatures[0] ?? null, signature));
+}
+
+function aggregateDimensionsVerified(kind: "average" | "total", inputs: Record<string, number>, claimedResult: number | null, text: string): boolean {
+  if (claimedResult === null) return false;
+  const label = kind === "average" ? "average|mean" : "total|sum";
+  for (const segment of sentenceSegments(text)) {
+    const wordPattern = new RegExp(`\\b(?:${label})\\s+of\\b(.{1,120}?)\\b(?:is|was|equals?)\\b(.{0,40})`, "gi");
+    for (const match of segment.matchAll(wordPattern)) {
+      if (aggregateQuantitiesVerified(match[1] ?? "", match[2] ?? "", inputs, claimedResult)) return true;
+    }
+    const equalsPattern = new RegExp(`\\b(?:${label})\\s+of\\b([^=]{1,120})=(.{0,40})`, "gi");
+    for (const match of segment.matchAll(equalsPattern)) {
+      if (aggregateQuantitiesVerified(match[1] ?? "", match[2] ?? "", inputs, claimedResult)) return true;
+    }
+    if (kind === "total") {
+      for (const match of segment.matchAll(/(.{1,120})=(.{0,40})/g)) {
+        const operands = match[1] ?? "";
+        if (operands.includes("+") && aggregateQuantitiesVerified(operands, match[2] ?? "", inputs, claimedResult)) return true;
+      }
+    }
+  }
+  return false;
 }
 
 function hasOrderedPair(text: string, first: number, second: number, separator: RegExp): boolean {
@@ -314,6 +484,27 @@ function rolesVerified(kind: NumericKind, inputs: Record<string, number>, claime
   }
 }
 
+function dimensionsVerified(kind: NumericKind, inputs: Record<string, number>, claimedResult: number | null, text: string): boolean {
+  switch (kind) {
+    case "percent_change":
+      return typeof inputs.from === "number" && typeof inputs.to === "number"
+        && fromToDimensionsVerified(text, inputs.from, inputs.to);
+    case "ratio":
+      return typeof inputs.numerator === "number" && typeof inputs.denominator === "number"
+        && sentenceSegments(text).some((segment) => orderedPairDimensionsVerified(segment, inputs.numerator!, inputs.denominator!, /[:/]|\bto\b|\bout of\b/i));
+    case "market_share":
+      return typeof inputs.part === "number" && typeof inputs.whole === "number"
+        && sentenceSegments(text).some((segment) => orderedPairDimensionsVerified(segment, inputs.part!, inputs.whole!, /[/]|\bout of\b|\bof\b/i));
+    case "average":
+    case "total":
+      return aggregateDimensionsVerified(kind, inputs, claimedResult, text);
+    case "unit_conversion":
+    case "date_interval":
+    case "none":
+      return true;
+  }
+}
+
 function needsRoleCheck(kind: NumericKind): boolean {
   return kind === "percent_change" || kind === "date_interval" || kind === "ratio" || kind === "market_share" || kind === "average" || kind === "total" || kind === "unit_conversion";
 }
@@ -413,12 +604,20 @@ export async function verifyNumericClaim(input: { claim: Claim; evidence: Eviden
   }
   if (needsRoleCheck(relation.kind)) {
     const roleEvidence = validatedEvidence.filter((e) => rolesVerified(relation.kind, relation.inputs, relation.claimedResult, e.excerpt));
+    const compatibleRoleEvidence = roleEvidence.filter((e) => dimensionsVerified(relation.kind, relation.inputs, relation.claimedResult, e.excerpt));
     const rolesInClaim = rolesVerified(relation.kind, relation.inputs, relation.claimedResult, input.claim.originalText);
-    if (!rolesInClaim && roleEvidence.length === 0) {
+    const claimDimensionsVerified = rolesInClaim
+      && dimensionsVerified(relation.kind, relation.inputs, relation.claimedResult, input.claim.originalText);
+    const incompatibleClaimRoles = rolesInClaim && !claimDimensionsVerified;
+    const onlyIncompatibleEvidenceRoles = !rolesInClaim && roleEvidence.length > 0 && compatibleRoleEvidence.length === 0;
+    if (incompatibleClaimRoles || onlyIncompatibleEvidenceRoles) {
+      issues.push("the numeric units or magnitude scales were incompatible or unverified");
+    }
+    if (!claimDimensionsVerified && compatibleRoleEvidence.length === 0 && !incompatibleClaimRoles && !onlyIncompatibleEvidenceRoles) {
       const labels = relation.kind === "percent_change" || relation.kind === "date_interval" ? "from and to" : "numeric";
       issues.push(`the ${labels} roles were not verified in the claim or validated evidence`);
     }
-    for (const e of roleEvidence) sourceEvidenceIds.add(e.id);
+    for (const e of compatibleRoleEvidence) sourceEvidenceIds.add(e.id);
   }
   if (relation.claimedResult !== null && !textHasNumber(input.claim.originalText, relation.claimedResult)) {
     issues.push(`claimed result ${shown(relation.claimedResult)} was not found in the claim`);

@@ -5,6 +5,7 @@
 import { sanitizeSource } from "../safety.js";
 import { extractQuotes, hashId, sha256hex } from "../text.js";
 import { canonicalizeUrl } from "../net/url.js";
+import { assertNoFixtureLabels } from "../mode.js";
 import type { PageFetcher, FetchedPage } from "../providers/fetch.js";
 import type { SearchProvider, SearchResult } from "../providers/search.js";
 import type { SafetyEvent, Source } from "../types.js";
@@ -88,6 +89,7 @@ export async function retrieveSources(input: RetrieveInput): Promise<RetrieveOut
     let found: SearchResult[];
     try {
       found = await pending;
+      assertNoFixtureLabels(found, "live search results");
     } catch (error) {
       input.onError?.({ operation: "search", query: q, url: null, error: errorMessage(error, "search provider failed without an error message") });
       throw error;
@@ -120,6 +122,7 @@ export async function retrieveSources(input: RetrieveInput): Promise<RetrieveOut
       input.onError?.(failure);
       continue;
     }
+    assertNoFixtureLabels([fetched], "live page fetch");
 
     if (sha256hex(fetched.text) !== fetched.contentHash) {
       const failure: RetrievalError = { operation: "fetch", query, url: result.url, error: "page fetcher returned a content hash that does not match the fetched text" };

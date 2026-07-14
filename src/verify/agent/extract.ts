@@ -41,7 +41,7 @@ export async function extractClaims(document: string, onEvent?: (msg: string) =>
   const stream = query({
     prompt: document,
     options: {
-      systemPrompt: MAPPER_PROMPT,
+      systemPrompt: `${MAPPER_PROMPT}\nReport each claim by calling record_claim exactly once per claim.`,
       mcpServers: { mapper: server },
       allowedTools: ["mcp__mapper__*"],
       tools: [],

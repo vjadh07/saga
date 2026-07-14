@@ -17,6 +17,7 @@ export class AgentSdkModelProvider implements ModelProvider {
   }
 
   async generateStructured<T>(request: StructuredModelRequest<T>): Promise<T> {
+    request.signal?.throwIfAborted();
     const shape = (request.schema as unknown as { shape?: Record<string, z.ZodTypeAny> }).shape;
     if (!shape) {
       throw new Error("AgentSdkModelProvider requires a ZodObject schema for structured output");
@@ -42,9 +43,13 @@ export class AgentSdkModelProvider implements ModelProvider {
       ],
     });
 
+    const abortController = new AbortController();
+    const onAbort = () => abortController.abort(request.signal?.reason);
+    request.signal?.addEventListener("abort", onAbort, { once: true });
     const stream = query({
       prompt: request.prompt,
       options: {
+        abortController,
         systemPrompt: request.system,
         mcpServers: { structured: server },
         allowedTools: ["mcp__structured__*"],
@@ -54,11 +59,16 @@ export class AgentSdkModelProvider implements ModelProvider {
       },
     });
 
-    for await (const message of stream) {
-      if (message.type === "result" && message.subtype !== "success" && !got) {
-        throw new Error(`model run for "${request.purpose}" failed: ${message.subtype}`);
+    try {
+      for await (const message of stream) {
+        if (message.type === "result" && message.subtype !== "success" && !got) {
+          throw new Error(`model run for "${request.purpose}" failed: ${message.subtype}`);
+        }
       }
+    } finally {
+      request.signal?.removeEventListener("abort", onAbort);
     }
+    request.signal?.throwIfAborted();
     if (!got) throw new Error(`model did not emit a structured result for "${request.purpose}"`);
 
     return request.schema.parse(captured);

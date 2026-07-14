@@ -85,6 +85,9 @@ test("arbitrary text flows through the full live audit: research, injection, cit
 
   // trust passport and a tamper-evident receipt
   expect(r.passport.documentStatus).toBe("materially_contradicted");
+  expect(r.lineage.sourceCount).toBe(1);
+  expect(r.lineage.independentOrigins).toBe(1);
+  expect(r.safetyEvents).toEqual(a.safety);
   expect(verifyReceipt(r.receipt).valid).toBe(true);
   expect(r.receipt.numericChecks).toEqual([a.numeric]);
   expect(r.receipt.searches.map(({ sequence, claimId, agent, query }) => ({ sequence, claimId, agent, query }))).toEqual([
@@ -118,6 +121,16 @@ test("arbitrary text flows through the full live audit: research, injection, cit
     numericCheckClaimId: null,
   });
   expect(types[types.length - 1]).toBe("AUDIT_COMPLETED");
+  expect(r.metrics).toMatchObject({
+    claims: 1,
+    searches: 2,
+    pageFetches: 2,
+    retries: 0,
+    estimatedCostUsd: null,
+    costBasis: "not configured by provider",
+  });
+  expect(r.metrics.modelCalls).toBeGreaterThan(0);
+  expect(r.metrics.durationMs).toBeGreaterThanOrEqual(0);
 });
 
 test("no fixture stance/relevance labels appear anywhere in the live result", async () => {
@@ -232,4 +245,63 @@ test("one source fetched by both agents records two retrievals without self-dupl
     ["skeptic", "shared scope query"],
   ]);
   expect(verifyReceipt(r.receipt).valid).toBe(true);
+});
+
+test("the live audit reports only stages it actually enters", async () => {
+  const { model, search, fetcher } = providers();
+  const stages: string[] = [];
+  await runLiveAudit({
+    auditId: "aud-stages",
+    document: DOC,
+    claims: [claim],
+    mode: "quick",
+    model,
+    search,
+    fetcher,
+    now: NOW,
+    onStage: async (stage) => { stages.push(stage); },
+  });
+  expect(stages).toEqual([
+    "planning_research",
+    "researching_support",
+    "researching_counterevidence",
+    "validating_evidence",
+    "analyzing_lineage",
+    "validating_temporal",
+    "validating_numeric",
+    "arbitrating",
+    "generating_revision",
+  ]);
+});
+
+test("an aborted live audit stops instead of converting cancellation into a failed claim", async () => {
+  const { model, search, fetcher } = providers();
+  const controller = new AbortController();
+  controller.abort(new Error("cancelled by user"));
+  await expect(runLiveAudit({
+    auditId: "aud-cancelled",
+    document: DOC,
+    claims: [claim],
+    mode: "quick",
+    model,
+    search,
+    fetcher,
+    now: NOW,
+    signal: controller.signal,
+  })).rejects.toThrow(/cancelled by user/i);
+});
+
+test("the live workflow rejects documents above the selected mode claim limit", async () => {
+  const { model, search, fetcher } = providers();
+  await expect(runLiveAudit({
+    auditId: "aud-over-limit",
+    document: DOC,
+    claims: [claim, { ...claim, id: "c2" }],
+    mode: "quick",
+    model,
+    search,
+    fetcher,
+    now: NOW,
+    resourceOptions: { limits: { maxClaims: 1, maxSearches: 10, maxModelCalls: 10, maxPageFetches: 10, maxAttempts: 1, callTimeoutMs: 100 } },
+  })).rejects.toThrow(/claim limit/i);
 });

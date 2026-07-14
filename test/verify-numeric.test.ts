@@ -76,6 +76,77 @@ test("verifyNumericClaim extracts values via the model and computes deterministi
   expect(check!.expression).toContain("100");
 });
 
+test("percent change rejects operands whose written magnitude scales differ", async () => {
+  const originalText = "Revenue rose from $80 million to $100 billion, a 25% increase.";
+  const claim: Claim = {
+    id: "c1", originalText, normalized: "x", claimType: "numeric",
+    location: { start: 0, end: originalText.length }, verifiable: true, timeSensitive: false, risk: "high", status: "contracted", asOf: null,
+  };
+  const model = new MockModelProvider({
+    numeric_extract: [{ kind: "percent_change", inputs: { from: 80, to: 100 }, claimedResult: 25, explanation: "revenue growth" }],
+  });
+
+  const check = await verifyNumericClaim({ claim, evidence: [], model });
+
+  expect(check!.computedResult).toBe(25);
+  expect(check!.grounded).toBe(false);
+  expect(check!.groundingIssues).toContain("the numeric units or magnitude scales were incompatible or unverified");
+  expect(check!.matches).toBeNull();
+});
+
+test("market share rejects part and whole values expressed at different scales", async () => {
+  const originalText = "The service has 30 million subscribers out of 120 billion subscribers, a 25% market share.";
+  const claim: Claim = {
+    id: "c1", originalText, normalized: "x", claimType: "numeric",
+    location: { start: 0, end: originalText.length }, verifiable: true, timeSensitive: false, risk: "high", status: "contracted", asOf: null,
+  };
+  const model = new MockModelProvider({
+    numeric_extract: [{ kind: "market_share", inputs: { part: 30, whole: 120 }, claimedResult: 25, explanation: "subscriber share" }],
+  });
+
+  const check = await verifyNumericClaim({ claim, evidence: [], model });
+
+  expect(check!.computedResult).toBe(25);
+  expect(check!.grounded).toBe(false);
+  expect(check!.groundingIssues).toContain("the numeric units or magnitude scales were incompatible or unverified");
+  expect(check!.matches).toBeNull();
+});
+
+test("aggregate verification rejects incompatible operand dimensions and an untyped result", async () => {
+  const originalText = "The total of 2 kilograms and 4 miles is 6.";
+  const claim: Claim = {
+    id: "c1", originalText, normalized: "x", claimType: "numeric",
+    location: { start: 0, end: originalText.length }, verifiable: true, timeSensitive: false, risk: "high", status: "contracted", asOf: null,
+  };
+  const model = new MockModelProvider({
+    numeric_extract: [{ kind: "total", inputs: { mass: 2, distance: 4 }, claimedResult: 6, explanation: "invalid mixed-unit total" }],
+  });
+
+  const check = await verifyNumericClaim({ claim, evidence: [], model });
+
+  expect(check!.computedResult).toBe(6);
+  expect(check!.grounded).toBe(false);
+  expect(check!.groundingIssues).toContain("the numeric units or magnitude scales were incompatible or unverified");
+  expect(check!.matches).toBeNull();
+});
+
+test("aggregate verification accepts operands and result with the same explicit unit", async () => {
+  const originalText = "The total of 2 kilograms and 4 kilograms is 6 kilograms.";
+  const claim: Claim = {
+    id: "c1", originalText, normalized: "x", claimType: "numeric",
+    location: { start: 0, end: originalText.length }, verifiable: true, timeSensitive: false, risk: "high", status: "contracted", asOf: null,
+  };
+  const model = new MockModelProvider({
+    numeric_extract: [{ kind: "total", inputs: { first: 2, second: 4 }, claimedResult: 6, explanation: "mass total" }],
+  });
+
+  const check = await verifyNumericClaim({ claim, evidence: [], model });
+
+  expect(check!.groundingIssues).toEqual([]);
+  expect(check!.grounded).toBe(true);
+  expect(check!.matches).toBe(true);
+});
+
 test("an extracted claimed result absent from the claim cannot drive a verdict", async () => {
   const claim: Claim = {
     id: "c1", originalText: "Revenue rose from $80M to $100M, a 25% increase.", normalized: "x", claimType: "numeric",

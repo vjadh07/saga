@@ -55,6 +55,7 @@ test("InMemoryAuditStore persists and loads an audit graph", async () => {
   const store = new InMemoryAuditStore();
   const rec = await store.createAudit({ mode: "live", document: "doc", workspaceId: "ws1" });
   expect(rec.status).toBe("created");
+  expect(rec.auditMode).toBe("deep");
   await store.updateAudit(rec.id, { status: "mapping_claims" });
   await store.appendEvent({ seq: 1, auditId: rec.id, claimId: "", type: "CLAIMS_EXTRACTED", detail: {}, at: "t" });
   const loaded = await store.loadAudit(rec.id);
@@ -69,6 +70,19 @@ test("InMemoryAuditStore isolates audits by id", async () => {
   const b = await store.createAudit({ mode: "live", document: "b", workspaceId: "ws2" });
   expect(a.id).not.toBe(b.id);
   await expect(store.loadAudit("nope")).rejects.toThrow(/not found/i);
+});
+
+test("InMemoryAuditStore does not expose mutable references", async () => {
+  const store = new InMemoryAuditStore();
+  const rec = await store.createAudit({ mode: "live", document: "doc", workspaceId: "ws" });
+  rec.status = "failed";
+  await store.saveResult(rec.id, { receipt: { finalAuditHash: "original" } });
+  const first = await store.loadAudit(rec.id);
+  (first.result as { receipt: { finalAuditHash: string } }).receipt.finalAuditHash = "changed";
+  first.record.status = "failed";
+  const second = await store.loadAudit(rec.id);
+  expect(second.record.status).toBe("created");
+  expect((second.result as { receipt: { finalAuditHash: string } }).receipt.finalAuditHash).toBe("original");
 });
 
 test("InProcessQueue runs the worker and supports cancellation", async () => {

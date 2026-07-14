@@ -6,12 +6,12 @@
 import { arbitrate } from "./arbiter.js";
 import { defaultContract } from "./contract.js";
 import { buildCorrectedDraft } from "./corrections.js";
-import { citedSources, investigate, skeptic, type CorpusEntry } from "./corpus.js";
+import { investigate, skeptic, type CorpusEntry } from "./corpus.js";
 import { detectLineage } from "./lineage.js";
 import { buildPassport } from "./passport.js";
 import { sanitizeSource } from "./safety.js";
+import { citedSources } from "./sources.js";
 import { assessTemporal, temporalScope } from "./temporal.js";
-import type { ExecutionMode } from "./mode.js";
 import type { Recorder } from "./recorder.js";
 import type {
   Claim,
@@ -34,14 +34,14 @@ export interface AuditInput {
   corpus: CorpusEntry[];
   now: string;
   recorder?: Recorder;
-  // this deterministic engine runs on a provided corpus, which in practice is a fixture,
-  // so it defaults to demo; the live orchestrator passes real evidence and tags it live
-  mode?: ExecutionMode;
+  // This deterministic engine accepts only Demo mode. The optional field preserves older
+  // callers that omitted it, while both its type and runtime boundary reject Live mode.
+  mode?: "demo";
 }
 
 export interface AuditResult {
   auditId: string;
-  mode: ExecutionMode;
+  mode: "demo";
   document: string;
   claimAudits: ClaimAudit[];
   lineage: LineageReport;
@@ -60,7 +60,11 @@ const INJECTION_KINDS = new Set<SafetyEvent["kind"]>([
 
 export function runAudit(input: AuditInput): AuditResult {
   const { auditId, document, claims, corpus, now, recorder } = input;
-  const mode: ExecutionMode = input.mode ?? "demo";
+  const requestedMode = (input as { mode?: unknown }).mode;
+  if (requestedMode !== undefined && requestedMode !== "demo") {
+    throw new Error("runAudit is demo-only; use runLiveAudit for arbitrary text and provider-backed evidence");
+  }
+  const mode = "demo" as const;
 
   // flight-recorder emit: durable if a recorder is present, always mirrored in-memory
   const flight: FlightEvent[] = [];

@@ -17,7 +17,8 @@ import { groundedArbitrate } from "../research/arbiter-grounded.js";
 import type { RetrievedSource, RetrievalError } from "../research/retrieve.js";
 import { detectLineage } from "../lineage.js";
 import { assessTemporal, temporalScope } from "../temporal.js";
-import { citedSources } from "../corpus.js";
+import { citedSources } from "../sources.js";
+import type { LiveAuditStage } from "./stages.js";
 import type { AuditMode } from "../mapview.js";
 import type { ModelProvider } from "../providers/model.js";
 import type { PageFetcher } from "../providers/fetch.js";
@@ -82,11 +83,18 @@ export interface AuditClaimInput {
   now: string;
   trace?: LiveClaimTrace;
   emit?: (type: FlightEventType, detail: Record<string, unknown>) => void;
+  signal?: AbortSignal;
+  onStage?: (stage: LiveAuditStage, claimId: string) => void | Promise<void>;
 }
 
 export async function auditClaim(input: AuditClaimInput): Promise<LiveClaimAudit> {
   const { claim, mode, model, search, fetcher, now } = input;
   const emit = input.emit ?? (() => {});
+  const enter = async (stage: LiveAuditStage): Promise<void> => {
+    input.signal?.throwIfAborted();
+    await input.onStage?.(stage, claim.id);
+    input.signal?.throwIfAborted();
+  };
   const trace = input.trace ?? createLiveClaimTrace();
   const hooks = (agent: "investigator" | "skeptic") => ({
     onSearch(query: string): void {
@@ -101,6 +109,7 @@ export async function auditClaim(input: AuditClaimInput): Promise<LiveClaimAudit
       trace.errors.push({ agent, operation: error.operation, query: error.query, url: error.url, error: error.error });
     },
   });
+  await enter("planning_research");
   const contract = defaultContract(claim);
   emit("CONTRACT_DEFINED", { claimId: claim.id, primaryRequired: contract.primaryRequired });
 
@@ -109,6 +118,7 @@ export async function auditClaim(input: AuditClaimInput): Promise<LiveClaimAudit
 
   // opinions are not researched
   if (!claim.verifiable) {
+    await enter("arbitrating");
     const verdict = groundedArbitrate({
       claim, contractEvaluation: emptyContractEval(claim.id), temporal: emptyTemporal, numeric: null, conflict: noConflict,
       evidence: [], supportOrigins: 0, contraOrigins: 0,
@@ -121,7 +131,9 @@ export async function auditClaim(input: AuditClaimInput): Promise<LiveClaimAudit
   const plan = await planResearch({ claim, contract, mode, model });
 
   // 2. independent Investigator and Skeptic
+  await enter("researching_support");
   const inv = await investigateClaim({ claim, plan, search, fetcher, model, ...hooks("investigator") });
+  await enter("researching_counterevidence");
   const skep = await skepticResearch({ claim, plan, search, fetcher, model, ...hooks("skeptic") });
   const executedSearches = trace.executedSearches;
 
@@ -132,12 +144,14 @@ export async function auditClaim(input: AuditClaimInput): Promise<LiveClaimAudit
   // if nothing at all could be retrieved, this claim's research failed
   const examined = dedupeSources([...inv.sourcesExamined, ...skep.sourcesExamined]);
   if (examined.length === 0) {
+    await enter("arbitrating");
     const verdict = groundedArbitrate({ claim, contractEvaluation: emptyContractEval(claim.id), temporal: emptyTemporal, numeric: null, conflict: noConflict, evidence: [], supportOrigins: 0, contraOrigins: 0, researchFailed: true });
     emit("VERDICT_REACHED", { claimId: claim.id, verdict: verdict.verdict, confidence: verdict.confidence });
     return baseAudit(claim, contract, plan, verdict, emptyTemporal, noConflict, emptyContractEval(claim.id), [], examined, safety, errors, null, executedSearches);
   }
 
   // 3. source-quality gate
+  await enter("validating_evidence");
   const byId = new Map(examined.map((s) => [s.id, s]));
   const quality: SourceQualityAssessment[] = [];
   const rejectedSources = new Set<string>();
@@ -169,6 +183,7 @@ export async function auditClaim(input: AuditClaimInput): Promise<LiveClaimAudit
   if (contradicting.length > 0) emit("CONTRADICTION_FOUND", { claimId: claim.id, count: contradicting.length });
 
   // 5. lineage per side (independent origins)
+  await enter("analyzing_lineage");
   const supportSources = citedSources(supporting, byId);
   const contraSources = citedSources(againstAll, byId);
   const supportOrigins = detectLineage(supportSources).independentOrigins;
@@ -178,6 +193,7 @@ export async function auditClaim(input: AuditClaimInput): Promise<LiveClaimAudit
   }
 
   // 6. temporal (only contradictions drive supersession)
+  await enter("validating_temporal");
   const temporal = assessTemporal({
     scope: temporalScope(claim), asOf: claim.asOf,
     supporting: supporting.map((e) => byId.get(e.sourceId)?.publishedAt ?? "").filter(Boolean),
@@ -187,9 +203,14 @@ export async function auditClaim(input: AuditClaimInput): Promise<LiveClaimAudit
   if (temporal.superseded) emit("TEMPORAL_FLAGGED", { claimId: claim.id, note: temporal.note });
 
   // 7. numeric recomputation
-  const numeric = claim.claimType === "numeric" ? await verifyNumericClaim({ claim, evidence: validated, model }) : null;
+  let numeric: NumericCheck | null = null;
+  if (claim.claimType === "numeric") {
+    await enter("validating_numeric");
+    numeric = await verifyNumericClaim({ claim, evidence: validated, model });
+  }
 
   // 8. operational contract enforcement
+  await enter("arbitrating");
   const contractEvaluation = evaluateContract({
     claim, contract, plan, supporting, contradicting: againstAll, sourceById: byId, independentOrigins: supportOrigins,
     evidenceCurrent: !temporal.superseded,

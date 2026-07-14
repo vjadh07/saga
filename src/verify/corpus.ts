@@ -70,18 +70,3 @@ export function investigate(claimId: string, corpus: CorpusEntry[], cleanById: M
 export function skeptic(claimId: string, corpus: CorpusEntry[], cleanById: Map<string, string>): RetrievalResult {
   return retrieve(claimId, corpus, cleanById, ["contradicts", "qualifies"], "skeptic");
 }
-
-// Sources cited by a set of evidence, in stable order.
-export function citedSources(evidence: Evidence[], byId: Map<string, Source>): Source[] {
-  const seen = new Set<string>();
-  const out: Source[] = [];
-  for (const e of evidence) {
-    if (seen.has(e.sourceId)) continue;
-    const s = byId.get(e.sourceId);
-    if (s) {
-      seen.add(e.sourceId);
-      out.push(s);
-    }
-  }
-  return out;
-}

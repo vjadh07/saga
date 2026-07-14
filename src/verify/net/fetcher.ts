@@ -12,7 +12,7 @@ export interface RawResponse {
   headers: { location?: string; "content-type"?: string };
   body: string;
 }
-export type Transport = (url: URL) => Promise<RawResponse>;
+export type Transport = (url: URL, signal?: AbortSignal) => Promise<RawResponse>;
 
 export interface FetcherOptions {
   transport?: Transport;
@@ -64,7 +64,8 @@ export function extractReadableText(html: string): { title: string; text: string
 
 // Default transport: real network fetch with DNS SSRF re-check, timeout, and size cap.
 // Not exercised by the default test suite (needs network); tests inject a transport.
-async function nodeTransport(url: URL, timeoutMs: number, maxBytes: number): Promise<RawResponse> {
+async function nodeTransport(url: URL, timeoutMs: number, maxBytes: number, signal?: AbortSignal): Promise<RawResponse> {
+  signal?.throwIfAborted();
   const dns = await import("node:dns/promises");
   const addrs = await dns.lookup(url.hostname, { all: true }).catch(() => {
     throw new Error(`dns lookup failed for ${url.hostname}`);
@@ -73,7 +74,9 @@ async function nodeTransport(url: URL, timeoutMs: number, maxBytes: number): Pro
     if (isBlockedIp(a.address)) throw new Error(`blocked resolved address: ${a.address}`);
   }
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const onAbort = () => ctrl.abort(signal?.reason);
+  signal?.addEventListener("abort", onAbort, { once: true });
+  const timer = setTimeout(() => ctrl.abort(new Error(`page fetch timed out after ${timeoutMs}ms`)), timeoutMs);
   try {
     const res = await fetch(url, {
       redirect: "manual",
@@ -104,6 +107,7 @@ async function nodeTransport(url: URL, timeoutMs: number, maxBytes: number): Pro
     };
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
   }
 }
 
@@ -121,17 +125,18 @@ export class LivePageFetcher implements PageFetcher {
     this.allowed = new Set((opts.allowedContentTypes ?? DEFAULT_ALLOWED).map((c) => c.toLowerCase()));
     this.now = opts.now ?? (() => new Date().toISOString());
     const timeoutMs = opts.timeoutMs ?? 10_000;
-    this.transport = opts.transport ?? ((url) => nodeTransport(url, timeoutMs, this.maxBytes));
+    this.transport = opts.transport ?? ((url, signal) => nodeTransport(url, timeoutMs, this.maxBytes, signal));
   }
 
-  async fetch(url: string): Promise<FetchedPage> {
+  async fetch(url: string, context: { signal?: AbortSignal } = {}): Promise<FetchedPage> {
+    context.signal?.throwIfAborted();
     const originalUrl = assertSafeUrl(url).href;
     let current = assertSafeUrl(url);
     const visited = new Set([current.href]);
 
     let res: RawResponse;
     for (let i = 0; ; i++) {
-      res = await this.transport(current);
+      res = await this.transport(current, context.signal);
       if (res.status >= 300 && res.status < 400 && res.headers.location) {
         if (i >= this.maxRedirects) throw new Error("too many redirects");
         let next: URL;

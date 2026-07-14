@@ -17,6 +17,7 @@ node_modules/
 dist/
 coverage/
 *.log
+.vercel/
 
 # python
 __pycache__/

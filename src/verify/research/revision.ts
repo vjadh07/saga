@@ -17,6 +17,7 @@ const RevisionSchema = z.object({
 }).strict();
 
 const PLACEHOLDER = /(?:\bTODO\b|\bTBD\b|\bPLACEHOLDER\b|\bINSERT\b.{0,80}\bHERE\b|\[(?:update|qualify|removed?|remove|citation needed|unverified|disputed)\b)/i;
+const EVIDENCE_LIMITATION_PREFIX = "Based on the available evidence, ";
 const CRITICAL_QUALIFIERS = new Set([
   "not", "no", "never", "without", "only", "except", "unless", "more", "less", "least", "most",
   "before", "after", "under", "over", "approximately", "about", "around", "may", "might", "could",
@@ -92,6 +93,12 @@ function matchesCompleteGrounding(replacement: string, grounding: string): boole
   const left = factualTokens(replacement);
   const right = factualTokens(grounding);
   return left.length === right.length && left.every((token, index) => token === right[index]);
+}
+
+function evidenceLimitedClause(sentence: string): string | null {
+  if (!sentence.startsWith(EVIDENCE_LIMITATION_PREFIX)) return null;
+  const clause = sentence.slice(EVIDENCE_LIMITATION_PREFIX.length).trim();
+  return clause === "" ? null : clause;
 }
 
 const NUMERIC_ATOM = /(?:[+\-]?[$€£¥]?|[$€£¥][+\-]?)(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:e[+\-]?\d+)?(?:\s*(?:%|percent(?:age)?|thousand|million|billion|trillion|years?|months?|weeks?|days?|hours?|minutes?|seconds?|ms|kg|km|cm|mm|g|lbs?|mph|kph|usd|eur|gbp|[kmbt]))?/giu;
@@ -216,12 +223,16 @@ export function validateRevision(input: ValidateRevisionInput): { ok: boolean; r
 
   const matchedEvidenceIds = new Set<string>();
   let numericGroundingUsed = false;
+  let evidenceLimitedSentenceCount = 0;
   for (const sentence of sentences) {
+    const limitedClause = input.verdictKind === "supported_with_qualifications" ? evidenceLimitedClause(sentence) : null;
+    const evidenceGroundingTarget = limitedClause ?? sentence;
+    if (limitedClause) evidenceLimitedSentenceCount++;
     let sentenceGrounded = false;
     for (const id of citations) {
       const cited = evidenceById.get(id)!;
-      if (!matchesGrounding(sentence, cited.excerpt)) continue;
-      if (cited.citationAssessment!.qualifiersOmitted && !matchesCompleteGrounding(sentence, cited.excerpt)) continue;
+      if (!matchesGrounding(evidenceGroundingTarget, cited.excerpt)) continue;
+      if (cited.citationAssessment!.qualifiersOmitted && !matchesCompleteGrounding(evidenceGroundingTarget, cited.excerpt)) continue;
       matchedEvidenceIds.add(id);
       sentenceGrounded = true;
     }
@@ -249,7 +260,13 @@ export function validateRevision(input: ValidateRevisionInput): { ok: boolean; r
   }
   const completeQualification = matchedEvidence.some((item) => item.stance === "qualifies"
     && sentences.some((sentence) => matchesCompleteGrounding(sentence, item.excerpt)));
-  if (input.verdictKind === "supported_with_qualifications" && !completeQualification) {
+  const qualifyingEvidenceAvailable = [...evidenceById.values()].some((item) => item.stance === "qualifies");
+  const evidenceLimitedSupport = !qualifyingEvidenceAvailable
+    && sentences.length === 1
+    && evidenceLimitedSentenceCount === 1
+    && matchedEvidence.length > 0
+    && matchedEvidence.every((item) => item.stance === "supports");
+  if (input.verdictKind === "supported_with_qualifications" && !completeQualification && !evidenceLimitedSupport) {
     return { ok: false, reason: "a qualified revision must use qualifying evidence", citations };
   }
   if (input.verdictKind === "disputed") {
@@ -322,6 +339,9 @@ function deterministicRevision(claim: Claim, verdict: Verdict, evidence: Evidenc
   } else if (verdict.claimId === claim.id && verdict.verdict === "supported_with_qualifications" && qualification) {
     replacement = qualification.text;
     citations = [qualification.evidence.id];
+  } else if (verdict.claimId === claim.id && verdict.verdict === "supported_with_qualifications" && support) {
+    replacement = `${EVIDENCE_LIMITATION_PREFIX}${support.text}`;
+    citations = [support.evidence.id];
   } else if (verdict.claimId === claim.id && verdict.verdict === "outdated" && contradiction) {
     replacement = contradiction.text;
     citations = [contradiction.evidence.id];

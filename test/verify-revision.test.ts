@@ -136,6 +136,27 @@ test("a qualification cannot omit its structural geographic scope", () => {
   expect(v.ok).toBe(false);
 });
 
+test("evidence-limitation framing cannot bypass available qualifying evidence", () => {
+  const supporting: Evidence = {
+    ...evidence[0]!, id: "support", sourceId: "support-source", stance: "supports", excerpt: "Revenue grew", capturedBy: "investigator",
+    citationAssessment: { ...evidence[0]!.citationAssessment!, relation: "direct_support" },
+  };
+  const scoped: Evidence = {
+    ...evidence[0]!, id: "scoped", stance: "qualifies", relevance: "weak", excerpt: "Revenue grew in Europe", capturedBy: "skeptic",
+    citationAssessment: { ...evidence[0]!.citationAssessment!, relation: "qualification", samePopulation: false },
+  };
+  const v = validateRevision({
+    claimId: claim.id,
+    original: claim.originalText,
+    replacement: "Based on the available evidence, Revenue grew.",
+    verdictKind: "supported_with_qualifications",
+    citationIds: ["support"],
+    evidence: [supporting, scoped],
+  });
+  expect(v.ok).toBe(false);
+  expect(v.reason).toMatch(/qualifying evidence/i);
+});
+
 test("a revision cannot drop attribution when citation validation found omitted qualifiers", () => {
   const attributed: Evidence = {
     ...evidence[0]!, id: "attributed", excerpt: "Bob said Alice did not commit fraud",
@@ -230,6 +251,32 @@ test("reviseChange falls back to polished evidence prose when model prose is inv
   expect(change!.replacement).toBe("A rival overtook Northwind in 2025.");
   expect(change!.replacement).not.toMatch(/\[(?:update|removed|qualify|unverified)/i);
   expect(change!.citations).toEqual(["e1"]);
+});
+
+test("contract-limited support falls back to polished citation-grounded qualified prose", async () => {
+  const supporting: Evidence = {
+    ...evidence[0]!,
+    id: "support",
+    sourceId: "support-source",
+    stance: "supports",
+    excerpt: "Northwind remains the largest home battery maker in North America",
+    capturedBy: "investigator",
+    citationAssessment: { ...evidence[0]!.citationAssessment!, relation: "direct_support" },
+  };
+  const qualified: Verdict = {
+    ...verdict("supported_with_qualifications", "Qualify: the primary-source requirement was not met."),
+    supporting: ["support"],
+    contradicting: [],
+  };
+
+  const change = await reviseChange({ claim, verdict: qualified, evidence: [supporting], model: new MockModelProvider({}) });
+
+  expect(change).not.toBeNull();
+  expect(change!.source).toBe("deterministic_revision");
+  expect(change!.replacement).toBe("Based on the available evidence, Northwind remains the largest home battery maker in North America.");
+  expect(change!.replacement.trim()).not.toBe("");
+  expect(change!.replacement).not.toMatch(/\[(?:update|removed|qualify|unverified)/i);
+  expect(change!.citations).toEqual(["support"]);
 });
 
 test("reviseChange bypasses the model and removes an insufficient ungrounded claim", async () => {

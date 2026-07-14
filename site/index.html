@@ -333,12 +333,12 @@
 
 <nav>
   <div class="wrap">
-    <a class="brand" href="#">SAGA<b>.</b></a>
+    <a class="brand" href="/">SAGA<b>.</b></a>
     <div class="links">
       <a href="#how" class="hide-sm">How it works</a>
-      <a href="#proof" class="hide-sm">Proof</a>
-      <a href="#use" class="hide-sm">Use it</a>
-      <a class="gh" href="https://github.com/vjadh07/saga">GitHub</a>
+      <a href="#proof" class="hide-sm">What it catches</a>
+      <a href="https://github.com/vjadh07/saga" class="hide-sm">GitHub</a>
+      <a class="gh" href="/demo">Try the demo</a>
     </div>
   </div>
 </nav>
@@ -349,10 +349,10 @@
   <div class="wrap">
     <div>
       <h1 data-reveal>Verify before <span class="grad">you publish.</span></h1>
-      <p class="sub" data-reveal style="--i:1">Saga is an adversarial evidence-auditing agent. It breaks AI-written content into atomic claims and gives you the receipts, not a credibility score.</p>
+      <p class="sub" data-reveal style="--i:1">Saga checks AI-written text claim by claim. It finds evidence, challenges each claim, explains what is wrong, and gives you a corrected draft with sources.</p>
       <div class="cta-row" data-reveal style="--i:2">
-        <a class="btn btn-primary" href="#proof">See it catch a fake</a>
-        <a class="btn btn-ghost" href="https://github.com/vjadh07/saga">GitHub</a>
+        <a class="btn btn-primary" href="/demo">Try the sample audit</a>
+        <a class="btn btn-ghost" href="https://github.com/vjadh07/saga">View on GitHub</a>
       </div>
     </div>
     <div data-reveal style="--i:2">
@@ -524,11 +524,15 @@ claim <span class="dim">"batteries last 40 years"</span>
 
 <section id="use">
   <div class="wrap">
-    <h2 data-reveal>Use it</h2>
-    <p class="lede" data-reveal style="--i:1">Clone it and audit the demo report. Node 22.5 or newer is the only requirement. Live audits also need Brave Search and a logged-in Claude Code install.</p>
+    <h2 data-reveal>Try Saga</h2>
+    <p class="lede" data-reveal style="--i:1">Open the public sample audit instantly. It uses a fictional company and fixed evidence, so every visitor sees the same repeatable result. For live web research, run Saga locally with your own provider credentials.</p>
+    <div class="cta-row" data-reveal style="--i:2;margin-top:24px">
+      <a class="btn btn-primary" href="/demo">Open the sample audit</a>
+      <a class="btn btn-ghost" href="https://github.com/vjadh07/saga">Get the source code</a>
+    </div>
     <div class="use-grid">
       <div data-reveal>
-        <h3>Run the whole thing</h3>
+        <h3>Run live checks locally</h3>
         <pre class="block">git clone https://github.com/vjadh07/saga
 cd saga &amp;&amp; npm install
 npm test          <span class="c"># deterministic and mock-provider checks</span>

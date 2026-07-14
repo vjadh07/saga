@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import { expect, test } from "vitest";
 import { DEMO_CLAIMS, DEMO_CORPUS, DEMO_DOCUMENT, DEMO_NOW } from "../src/verify/fixtures/demo.js";
@@ -12,18 +13,28 @@ const demo = runAudit({
   now: DEMO_NOW,
 });
 
-test("the hosted worker serves the public Demo and no Live API", async () => {
-  const source = renderHostedDemoWorker(demo);
+const landingPage = readFileSync(new URL("../site/index.html", import.meta.url), "utf8");
+
+test("the hosted worker serves the landing page, public Demo, and no Live API", async () => {
+  const source = renderHostedDemoWorker(demo, landingPage);
   const sandbox: Record<string, unknown> = { Request, Response, URL };
   new Script(source.replace("export default", "globalThis.__worker =")).runInNewContext(sandbox);
   const worker = sandbox.__worker as { fetch(request: Request): Response };
 
-  const response = worker.fetch(new Request("https://saga.example/demo"));
-  expect(response.status).toBe(200);
-  const html = await response.text();
-  expect(html).toContain("Demo: fixed fictional example.");
-  expect(html).toContain('"hostedDemoOnly":true');
-  expect(response.headers.get("content-security-policy")).toContain("connect-src 'none'");
+  const landingResponse = worker.fetch(new Request("https://saga.example/"));
+  expect(landingResponse.status).toBe(200);
+  const landingHtml = await landingResponse.text();
+  expect(landingHtml).toContain("Verify before");
+  expect(landingHtml).toContain('href="/demo"');
+  expect(landingHtml).not.toContain("127.0.0.1");
+
+  const demoResponse = worker.fetch(new Request("https://saga.example/demo"));
+  expect(demoResponse.status).toBe(200);
+  const demoHtml = await demoResponse.text();
+  expect(demoHtml).toContain("Demo: fixed fictional example.");
+  expect(demoHtml).toContain('"hostedDemoOnly":true');
+  expect(demoResponse.headers.get("content-security-policy")).toContain("connect-src 'none'");
+  expect(demoResponse.headers.get("content-security-policy")).toContain("font-src 'self' data:");
 
   const missing = worker.fetch(new Request("https://saga.example/api/audits"));
   expect(missing.status).toBe(404);

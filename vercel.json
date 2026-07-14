@@ -3,12 +3,6 @@
   "buildCommand": "npm run build:hosted",
   "outputDirectory": "docs",
   "cleanUrls": true,
-  "rewrites": [
-    {
-      "source": "/demo",
-      "destination": "/index.html"
-    }
-  ],
   "headers": [
     {
       "source": "/(.*)",

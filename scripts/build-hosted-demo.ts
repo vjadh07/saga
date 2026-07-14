@@ -13,6 +13,8 @@ const demo = runAudit({
 
 mkdirSync("dist/server", { recursive: true });
 mkdirSync("docs", { recursive: true });
+mkdirSync("docs/demo", { recursive: true });
 writeFileSync("dist/server/index.js", renderHostedDemoWorker(demo), "utf8");
 writeFileSync("docs/index.html", renderHostedDemoPage(demo), "utf8");
+writeFileSync("docs/demo/index.html", renderHostedDemoPage(demo), "utf8");
 console.log("Built the public deterministic Saga Demo.");

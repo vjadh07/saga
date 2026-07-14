@@ -374,6 +374,18 @@ function deterministicRevision(claim: Claim, verdict: Verdict, evidence: Evidenc
   };
 }
 
+export function createDeterministicRevision(input: {
+  claim: Claim;
+  verdict: Verdict;
+  evidence: Evidence[];
+  numeric?: NumericCheck | null;
+}): DraftChange | null {
+  const numeric = input.numeric ?? null;
+  if (input.verdict.requiredCorrection === null) return null;
+  const evidence = eligibleEvidence(input.claim, input.verdict, input.evidence, numeric);
+  return deterministicRevision(input.claim, input.verdict, evidence, numeric);
+}
+
 export async function reviseChange(input: { claim: Claim; verdict: Verdict; evidence: Evidence[]; numeric?: NumericCheck | null; model: ModelProvider }): Promise<DraftChange | null> {
   const { claim, verdict, model } = input;
   if (verdict.requiredCorrection === null) return null;

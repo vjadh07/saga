@@ -30,6 +30,10 @@ test("investigate returns supporting evidence whose passage survived sanitizatio
   expect(r.evidence).toHaveLength(1);
   expect(r.evidence[0]!.stance).toBe("supports");
   expect(r.evidence[0]!.capturedBy).toBe("investigator");
+  expect(r.evidence[0]!.citationAssessment).toMatchObject({
+    exactMatchVerified: true,
+    explanation: "Deterministic Demo fixture contract; not a Live model assessment.",
+  });
   expect(r.rejected).toHaveLength(0);
 });
 

@@ -9,6 +9,7 @@ import { buildCorrectedDraft } from "./corrections.js";
 import { investigate, skeptic, type CorpusEntry } from "./corpus.js";
 import { detectLineage } from "./lineage.js";
 import { buildPassport } from "./passport.js";
+import { createDeterministicRevision } from "./research/revision.js";
 import { sanitizeSource } from "./safety.js";
 import { citedSources } from "./sources.js";
 import { assessTemporal, temporalScope } from "./temporal.js";
@@ -185,7 +186,11 @@ export function runAudit(input: AuditInput): AuditResult {
 
   const correctedDraft = buildCorrectedDraft(
     document,
-    claimAudits.map((a) => ({ claim: a.claim, verdict: a.verdict })),
+    claimAudits.map((a) => ({
+      claim: a.claim,
+      verdict: a.verdict,
+      change: createDeterministicRevision({ claim: a.claim, verdict: a.verdict, evidence: a.evidence }),
+    })),
   );
 
   emit("AUDIT_COMPLETED", "", {

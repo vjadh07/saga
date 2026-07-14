@@ -1,14 +1,15 @@
 // Corrected-draft assembly. For every claim that needs revision, produce a tracked
 // change and a proposed draft with the change applied at the claim's exact character
 // offsets. The original is never mutated; both are returned so the user can review the
-// diff and approve or reject before anything is applied. Deterministic; an LLM can later
-// refine the prose of each replacement, but the set and placement of changes is fixed
-// here.
+// diff and approve or reject before anything is applied. Accepted evidence-grounded
+// prose may be supplied by the Revision Agent; otherwise a safe verdict-only sentence
+// is used. The set and placement of changes remains deterministic.
 import type { ChangeKind, Claim, CorrectedDraft, DraftChange, Verdict } from "./types.js";
 
 export interface CorrectionItem {
   claim: Pick<Claim, "id" | "originalText" | "location">;
   verdict: Verdict;
+  change?: DraftChange | null;
 }
 
 export function changeKind(verdict: Verdict["verdict"]): ChangeKind {
@@ -24,24 +25,20 @@ export function changeKind(verdict: Verdict["verdict"]): ChangeKind {
   }
 }
 
-// The text that replaces the original span in the proposed draft. Editorial markers
-// make the tracked change visible; the LLM correction pass can replace these with
-// finished prose later.
+// Safe editorial fallback for deterministic callers that do not have an accepted
+// evidence sentence. It states only the validated verdict and never inserts a marker.
 export function replacementText(original: string, v: Verdict): string {
   switch (v.verdict) {
     case "contradicted":
-      return `[removed - contradicted by evidence: ${v.contradicting.length} source(s)]`;
-    case "outdated": {
-      const fromCorrection = (v.requiredCorrection ?? "").replace(/^Update the claim\.\s*/, "");
-      const note = v.temporal?.note ?? (fromCorrection || "superseded by newer evidence");
-      return `${original} [update - ${note}]`;
-    }
+      return "The original claim was contradicted by validated evidence.";
+    case "outdated":
+      return "The original statement is no longer current.";
     case "supported_with_qualifications":
-      return `${original} [qualify - ${v.requiredCorrection ?? "add the missing qualification"}]`;
+      return "The available evidence supports a narrower claim, but the original wording omits important context.";
     case "disputed":
-      return `${original} [disputed - present both sides; evidence conflicts]`;
+      return "Reliable sources disagree about this claim.";
     case "insufficient_evidence":
-      return `${original} [unverified - no independent source found]`;
+      return "This claim could not be verified with sufficient reliable evidence.";
     default:
       return original;
   }
@@ -57,14 +54,20 @@ export function buildCorrectedDraft(original: string, items: CorrectionItem[]): 
   let draft = original;
   for (const it of ordered) {
     const { start, end } = it.claim.location;
-    const replacement = replacementText(it.claim.originalText, it.verdict);
+    const accepted = it.change?.claimId === it.claim.id
+      ? it.change
+      : null;
+    const replacement = accepted?.replacement ?? replacementText(it.claim.originalText, it.verdict);
     draft = draft.slice(0, start) + replacement + draft.slice(end);
     changes.push({
       claimId: it.claim.id,
       kind: changeKind(it.verdict.verdict),
       original: it.claim.originalText,
       replacement,
-      note: it.verdict.requiredCorrection!,
+      note: accepted?.note ?? it.verdict.requiredCorrection!,
+      citations: accepted?.citations ?? [],
+      source: accepted?.source ?? "deterministic_revision",
+      ...(accepted?.numericCheckClaimId ? { numericCheckClaimId: accepted.numericCheckClaimId } : {}),
     });
   }
   // report changes in document order

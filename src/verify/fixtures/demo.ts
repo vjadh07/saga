@@ -106,8 +106,8 @@ export const DEMO_CORPUS: CorpusEntry[] = [
 
   // lifespan: an injection tries to prop up the false claim; two credible contradictions
   ce(
-    source({ id: "nw-spec", title: "Northwind cell datasheet", publisher: "Northwind Energy", publishedAt: "2026-01-15T00:00:00.000Z", sourceType: "primary", content: "The datasheet lists a rated service life of 15 years and a 12 year limited warranty for the home battery." }),
-    ["lifespan"], "contradicts", "rated service life of 15 years and a 12 year limited warranty",
+    source({ id: "nw-spec", title: "Northwind cell datasheet", publisher: "Northwind Energy", publishedAt: "2026-01-15T00:00:00.000Z", sourceType: "primary", content: "The Northwind home battery has a rated service life of 15 years. It carries a 12 year limited warranty." }),
+    ["lifespan"], "contradicts", "The Northwind home battery has a rated service life of 15 years.",
   ),
   ce(
     source({ id: "battery-lab", title: "Accelerated cycling of home batteries", publisher: "Cell Testing Consortium", publishedAt: "2026-05-20T00:00:00.000Z", sourceType: "academic", content: "Accelerated cycling found no basis for a 40 year lifespan claim; projected usable life is approximately 15 years before significant capacity loss." }),
@@ -129,8 +129,8 @@ export const DEMO_CORPUS: CorpusEntry[] = [
   ce(source({ id: "wire-energy", title: "Northwind tops the market", publisher: "Energy Beat", publishedAt: "2026-02-06T08:00:00.000Z", sourceType: "news", content: "According to a release, " + RELEASE_CORE + "." }), ["market_lead"], "supports", RELEASE_CORE),
   ce(source({ id: "wire-watch", title: "Northwind leads home storage", publisher: "Storage Watch", publishedAt: "2026-02-06T09:15:00.000Z", sourceType: "news", content: RELEASE_CORE + " Analysts welcomed the news." }), ["market_lead"], "supports", RELEASE_CORE),
   ce(
-    source({ id: "market-2026", title: "H1 2026 residential storage share", publisher: "Rho Analytics", publishedAt: "2026-06-20T00:00:00.000Z", sourceType: "primary", content: "By units shipped, Volthome overtook Northwind to become the largest home battery maker in North America during 2025." }),
-    ["market_lead"], "contradicts", "Volthome overtook Northwind to become the largest home battery maker in North America during 2025",
+    source({ id: "market-2026", title: "H1 2026 residential storage share", publisher: "Rho Analytics", publishedAt: "2026-06-20T00:00:00.000Z", sourceType: "primary", content: "Volthome became the largest home battery maker in North America by units shipped during 2025." }),
+    ["market_lead"], "contradicts", "Volthome became the largest home battery maker in North America by units shipped during 2025.",
   ),
 
   // recyclable: manufacturer supports the headline number, an independent source qualifies
@@ -140,8 +140,8 @@ export const DEMO_CORPUS: CorpusEntry[] = [
     ["recyclable"], "supports", "99% of its battery materials are recyclable by mass",
   ),
   ce(
-    source({ id: "recycle-watch", title: "What actually gets recycled", publisher: "Circular Economy Review", publishedAt: "2026-05-02T00:00:00.000Z", sourceType: "academic", content: "While 99% is recyclable in principle, under 5% of Northwind cells are recycled today and the company operates no take-back program." }),
-    ["recyclable"], "qualifies", "under 5% of Northwind cells are recycled today and the company operates no take-back program",
+    source({ id: "recycle-watch", title: "What actually gets recycled", publisher: "Circular Economy Review", publishedAt: "2026-05-02T00:00:00.000Z", sourceType: "academic", content: "Under 5% of Northwind cells are recycled today. The company operates no take-back program." }),
+    ["recyclable"], "qualifies", "Under 5% of Northwind cells are recycled today.",
   ),
 ];
 

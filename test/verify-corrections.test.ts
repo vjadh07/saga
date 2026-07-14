@@ -48,14 +48,35 @@ test("a contradicted claim is marked for removal in the draft, original untouche
   expect(r.draft).toContain("Grids expanded.");
 });
 
-test("an outdated claim keeps its text and appends the temporal update", () => {
+test("an outdated claim gets safe finished fallback prose", () => {
   const original = "Coal was the top source in 2019.";
   const r = buildCorrectedDraft(original, [
     item("Coal was the top source in 2019.", 0, "outdated", "Update the claim. Historically accurate as of January 2019, but outdated as of June 2026."),
   ]);
   expect(r.changes[0]!.kind).toBe("update");
-  expect(r.draft).toContain("Coal was the top source in 2019.");
-  expect(r.draft).toMatch(/outdated as of June 2026/);
+  expect(r.draft).not.toContain("Coal was the top source in 2019.");
+  expect(r.draft).toContain("no longer current");
+  expect(r.draft).not.toMatch(/\[(?:update|qualify|removed|unverified|disputed)/i);
+});
+
+test("an accepted empty grounded revision removes the claim without adding uncited prose", () => {
+  const original = "The moon is made of cheese.";
+  const correction = item(original, 0, "contradicted", "Remove the contradicted claim.");
+  correction.change = {
+    claimId: correction.claim.id,
+    kind: "remove",
+    original,
+    replacement: "",
+    note: "No validated replacement was available.",
+    citations: [],
+    source: "deterministic_revision",
+  };
+
+  const r = buildCorrectedDraft(original, [correction]);
+
+  expect(r.draft).toBe("");
+  expect(r.changes[0]!.replacement).toBe("");
+  expect(r.changes[0]!.note).toBe("No validated replacement was available.");
 });
 
 test("multiple changes apply at the right offsets regardless of order", () => {
@@ -68,6 +89,7 @@ test("multiple changes apply at the right offsets regardless of order", () => {
   ]);
   expect(r.changes).toHaveLength(2);
   expect(r.draft).toContain("BBB middle text.");
-  expect(r.draft).toMatch(/qualify/i);
+  expect(r.draft).toMatch(/important context/i);
   expect(r.draft).toMatch(/contradicted/i);
+  expect(r.changes.every((change) => change.source === "deterministic_revision")).toBe(true);
 });

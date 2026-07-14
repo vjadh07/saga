@@ -30,14 +30,29 @@ function survives(passage: string, clean: string | undefined): boolean {
 }
 
 function toEvidence(claimId: string, e: CorpusEntry, capturedBy: Evidence["capturedBy"]): Evidence {
+  const relevance: Relevance = e.stance === "qualifies" ? "weak" : e.relevance;
+  const relation = e.stance === "supports"
+    ? relevance === "strong" ? "direct_support" : "partial_support"
+    : e.stance === "contradicts" ? "direct_contradiction" : "qualification";
   return {
     id: hashId("ev", claimId, e.source.id, e.stance),
     claimId,
     sourceId: e.source.id,
     stance: e.stance,
     excerpt: e.passage,
-    relevance: e.relevance,
+    relevance,
     capturedBy,
+    citationAssessment: {
+      relation,
+      explanation: "Deterministic Demo fixture contract; not a Live model assessment.",
+      exactMatchVerified: true,
+      sameEntity: true,
+      sameMetric: true,
+      samePeriod: true,
+      samePopulation: true,
+      claimStrongerThanSource: relation === "partial_support",
+      qualifiersOmitted: false,
+    },
   };
 }
 

@@ -55,6 +55,15 @@ test("the corrected draft changes exactly the three claims that need revision", 
   expect(r.correctedDraft.changes.map((c) => c.claimId).sort()).toEqual(["lifespan", "market_lead", "recyclable"]);
   expect(r.correctedDraft.original).toBe(DEMO_DOCUMENT);
   expect(r.correctedDraft.draft).not.toContain("last 40 years with no loss of capacity");
+  expect(r.correctedDraft.draft).not.toMatch(/\[(?:update|removed|qualify|unverified|disputed)/i);
+  expect(r.correctedDraft.changes.every((change) => change.source === "deterministic_revision")).toBe(true);
+  expect(r.correctedDraft.changes.every((change) => (change.citations?.length ?? 0) > 0)).toBe(true);
+  expect(r.correctedDraft.changes.find((change) => change.claimId === "lifespan")?.replacement)
+    .toBe("The Northwind home battery has a rated service life of 15 years.");
+  expect(r.correctedDraft.changes.find((change) => change.claimId === "market_lead")?.replacement)
+    .toBe("Volthome became the largest home battery maker in North America by units shipped during 2025.");
+  expect(r.correctedDraft.changes.find((change) => change.claimId === "recyclable")?.replacement)
+    .toBe("Under 5% of Northwind cells are recycled today.");
 });
 
 test("the run is deterministic", () => {

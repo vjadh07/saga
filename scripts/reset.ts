@@ -1,6 +1,7 @@
 // Wipe ledger and vendor state so a rehearsal starts from zero.
 import { mkdirSync, rmSync } from "node:fs";
 import { wipeLedger } from "../src/ledger/ledger.js";
+import { SqliteAuditStore } from "../src/verify/providers/store-sqlite.js";
 
 const base = process.env.VENDOR_URL ?? "http://127.0.0.1:4100";
 try {
@@ -16,3 +17,8 @@ try {
 mkdirSync("data", { recursive: true });
 wipeLedger(process.env.LEDGER_PATH ?? "data/ledger.db");
 console.log("ledger wiped");
+
+const auditStore = new SqliteAuditStore(process.env.AUDIT_DB_PATH ?? "data/audits.db");
+auditStore.clearAll();
+auditStore.close();
+console.log("guest audit history wiped; deterministic Demo fixture remains unchanged");

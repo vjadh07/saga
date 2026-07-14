@@ -5,6 +5,8 @@
   "description": "Evidence-grounded verification for AI-written claims",
   "type": "module",
   "scripts": {
+    "build": "npm run build:hosted",
+    "build:hosted": "tsx scripts/build-hosted-demo.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "verify": "tsx scripts/verify.ts",

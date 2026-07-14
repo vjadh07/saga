@@ -10,6 +10,7 @@ export type StudioInitialView = "live" | "demo";
 export interface StudioPageOptions {
   initialView?: StudioInitialView;
   activeAuditId?: string | null;
+  hostedDemoOnly?: boolean;
 }
 
 const VERDICT_CLASS: Record<VerdictKind, string> = {
@@ -75,14 +76,16 @@ type StudioResult = AuditResult | LiveAuditResult;
 
 export function renderStudioPage(result: StudioResult, options: StudioPageOptions = {}): string {
   const embeddedMode = result.mode === "live" ? "live" : "demo";
+  const hostedDemoOnly = options.hostedDemoOnly === true;
   const requestedView = options.initialView ?? "live";
-  const initialView: StudioInitialView = embeddedMode === "live" ? "live" : requestedView;
+  const initialView: StudioInitialView = hostedDemoOnly ? "demo" : embeddedMode === "live" ? "live" : requestedView;
   const resultInitiallyVisible = embeddedMode === initialView;
   const labels = Object.fromEntries(VERDICT_KINDS.map((kind) => [kind, VERDICT_LABELS[kind]]));
   const bootstrap = JSON.stringify({
     embeddedResult: result,
     initialView,
-    activeAuditId: options.activeAuditId ?? null,
+    activeAuditId: hostedDemoOnly ? null : options.activeAuditId ?? null,
+    hostedDemoOnly,
   }).replace(/</g, "\\u003c");
 
   return `<meta charset="utf-8">
@@ -112,6 +115,7 @@ export function renderStudioPage(result: StudioResult, options: StudioPageOption
   .view-switch{display:flex;margin-left:auto;gap:2px;padding:3px;background:#edf1ed;border:1px solid transparent;border-radius:9px}
   .view-switch button{min-height:36px;padding:6px 13px;color:var(--dim);border-radius:7px;font-weight:650}
   .view-switch button:hover{color:var(--text)}
+  .view-switch button:disabled{cursor:not-allowed;opacity:.48}
   .view-switch button[aria-pressed="true"]{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(20,33,25,.12)}
   .modebadge{display:inline-block;font-family:var(--sans);font-size:11px;font-weight:750;letter-spacing:.04em;border:1px solid var(--line);border-radius:7px;padding:5px 8px}
   .modebadge.live{color:var(--ok);border-color:#b8dac8;background:#edf8f2}
@@ -217,11 +221,11 @@ export function renderStudioPage(result: StudioResult, options: StudioPageOption
   <span class="brand">Saga<b>.</b></span>
   <span class="tagline">Check claims. Fix the draft.</span>
   <div class="view-switch" role="group" aria-label="Audit view">
-    <button type="button" id="view-live" aria-pressed="${initialView === "live"}">Check text</button>
+    <button type="button" id="view-live" aria-pressed="${initialView === "live"}"${hostedDemoOnly ? ' disabled aria-disabled="true" title="Live mode requires local provider credentials"' : ""}>Check text</button>
     <button type="button" id="view-demo" aria-pressed="${initialView === "demo"}">Sample audit</button>
   </div>
   <span id="modebadge" class="modebadge ${initialView}">${initialView === "demo" ? "Demo mode" : "Live mode"}</span>
-  <span id="status" class="status">${initialView === "demo" ? "Deterministic demo audit" : embeddedMode === "live" ? "Live result loaded" : "Live mode ready"}</span>
+  <span id="status" class="status">${hostedDemoOnly ? "Public sample audit" : initialView === "demo" ? "Deterministic demo audit" : embeddedMode === "live" ? "Live result loaded" : "Live mode ready"}</span>
 </div></header>
 
 <main class="wrap">
@@ -267,7 +271,7 @@ export function renderStudioPage(result: StudioResult, options: StudioPageOption
   <div id="result-view"${resultInitiallyVisible ? "" : " hidden"}>
     <section class="result-hero">
       <div id="demo-notice" class="demo-notice"${embeddedMode === "demo" ? "" : " hidden"}>
-        <div><b>Demo: fixed fictional example.</b> This sample uses fixed evidence and does not search the live web, so every judge sees the same repeatable result.</div>
+        <div><b>Demo: fixed fictional example.</b> This sample uses fixed evidence and does not search the live web, so every judge sees the same repeatable result.${hostedDemoOnly ? " Live research is available when Saga is run from the repository with provider credentials." : ""}</div>
       </div>
       <div class="hero-grid">
         <div>
@@ -348,6 +352,7 @@ export function renderStudioPage(result: StudioResult, options: StudioPageOption
 <script id="studio-bootstrap" type="application/json">${bootstrap}</script>
 <script>
 const BOOT=JSON.parse(document.getElementById("studio-bootstrap").textContent);
+const HOSTED_DEMO_ONLY=BOOT.hostedDemoOnly===true;
 const VCLASS=${JSON.stringify(VERDICT_CLASS)};
 const LABEL=${JSON.stringify(labels)};
 const DOCUMENT_STATUS=${JSON.stringify(DOCUMENT_STATUS_LABELS)};
@@ -410,6 +415,7 @@ function updateModeControls(){
   modeBadge.className="modebadge "+currentView;
 }
 function setView(view){
+  if(HOSTED_DEMO_ONLY&&view==="live")return;
   currentView=view;
   updateModeControls();
   liveView.hidden=view!=="live";
@@ -680,9 +686,9 @@ retryButton.addEventListener("click",async()=>{
 });
 
 updateModeControls();
-const queryAuditId=new URLSearchParams(window.location.search).get("audit");
+const queryAuditId=HOSTED_DEMO_ONLY?null:new URLSearchParams(window.location.search).get("audit");
 if(queryAuditId){activeAuditId=queryAuditId;currentView="live";setView("live");beginPolling(queryAuditId,0)}
-else if(activeAuditId){currentView="live";setAuditUrl(activeAuditId);setView("live");beginPolling(activeAuditId,0)}
+else if(!HOSTED_DEMO_ONLY&&activeAuditId){currentView="live";setAuditUrl(activeAuditId);setView("live");beginPolling(activeAuditId,0)}
 else if(embeddedLive){setView("live")}
 else setView(currentView);
 </script>`;

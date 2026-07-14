@@ -31,7 +31,7 @@ function liveResult(base: AuditResult = demo): LiveAuditResult {
   } as unknown as LiveAuditResult;
 }
 
-function bootstrap(html: string): { embeddedResult: AuditResult | LiveAuditResult; initialView: string; activeAuditId: string | null } {
+function bootstrap(html: string): { embeddedResult: AuditResult | LiveAuditResult; initialView: string; activeAuditId: string | null; hostedDemoOnly: boolean } {
   const match = html.match(/<script id="studio-bootstrap" type="application\/json">([\s\S]*?)<\/script>/);
   expect(match).not.toBeNull();
   return JSON.parse(match![1]!.replace(/\\u003c/g, "<"));
@@ -61,6 +61,20 @@ test("an explicit Demo initial view reveals only a deterministic demo", () => {
   expect(html).toContain("Deterministic demo audit");
   expect(html).toContain("Demo: fixed fictional example.");
   expect(html).toContain("does not search the live web");
+});
+
+test("the hosted public page is a clearly labeled Demo and cannot enter Live mode", () => {
+  const html = renderStudioPage(demo, { hostedDemoOnly: true });
+  const data = bootstrap(html);
+
+  expect(data.initialView).toBe("demo");
+  expect(data.hostedDemoOnly).toBe(true);
+  expect(data.activeAuditId).toBeNull();
+  expect(html).toContain('id="view-live" aria-pressed="false" disabled aria-disabled="true"');
+  expect(html).toContain("Public sample audit");
+  expect(html).toContain("Live research is available when Saga is run from the repository with provider credentials.");
+  expect(html).not.toMatch(/id="result-view"[^>]*hidden/);
+  expect(html).toContain('if(HOSTED_DEMO_ONLY&&view==="live")return;');
 });
 
 test("a live-only result routes the Demo control to the deterministic guest demo", () => {

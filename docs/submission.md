@@ -38,6 +38,10 @@ Saga does more than call one model with a fact-checking prompt:
 
 ## Judge demo
 
+Open the public Live workspace at https://saga-omega-seven.vercel.app/demo. Enter one
+factual claim and click **Check this text**. The separate **Sample audit** button opens the
+deterministic fallback.
+
 ```bash
 npm install
 cp .env.example .env
@@ -48,7 +52,7 @@ npm run studio
 
 Open `http://127.0.0.1:4500/demo` for the deterministic guest demo. Follow [docs/demo.md](demo.md) for the five-minute presentation.
 
-For Live mode, add `BRAVE_SEARCH_API_KEY` to `.env`, use a logged-in local Claude Code CLI, and open `http://127.0.0.1:4500/`.
+For Live mode, add `GEMINI_API_KEY`, `GEMINI_MODEL=gemini-3.1-flash-lite`, and `TAVILY_API_KEY` to `.env`, then open `http://127.0.0.1:4500/`.
 
 ## Built during the hackathon
 
@@ -66,8 +70,8 @@ For Live mode, add `BRAVE_SEARCH_API_KEY` to `.env`, use a logged-in local Claud
 ## Technology
 
 - TypeScript and Node.js
-- Claude Agent SDK with Zod-validated structured outputs
-- Brave Search API
+- Gemini API or Claude Agent SDK with Zod-validated structured outputs
+- Tavily Search, Brave Search, or explicitly enabled Gemini grounding
 - SSRF-hardened native page retrieval
 - deterministic validation and canonical SHA-256 receipt hashing
 - SQLite persistence
@@ -76,7 +80,9 @@ For Live mode, add `BRAVE_SEARCH_API_KEY` to `.env`, use a logged-in local Claud
 
 ## Honest limitations
 
-- The reliable judging path is the deterministic Demo. A real Live smoke run requires Claude login, Brave credentials, outbound network access, and reachable public pages.
+- The hosted Live endpoint accepts one claim in Quick mode and does not persist its result after refresh. The local Studio supports broader modes and SQLite persistence.
+- Provider quota, outbound network access, and reachable public pages can still affect a Live run. A failed Live audit never switches to Sample results.
+- Gemini's unpaid tier may use submitted content to improve Google products, so the judge input should be fictional or non-sensitive.
 - The local worker and SQLite store are a single-node hackathon implementation.
 - The hidden-label evaluation is a small deterministic mock orchestration check, not an external accuracy benchmark.
 - Login, billing, teams, multi-tenant infrastructure, and managed production services are intentionally deferred.

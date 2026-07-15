@@ -8,6 +8,23 @@ The primary demo is the evidence auditor. It has two intentionally separate path
 Never present Demo output as the result of a failed Live request. If Live is unavailable,
 say that the external smoke path is unavailable and open the clearly labeled Demo route.
 
+## Public judge demo
+
+Open https://saga-omega-seven.vercel.app/demo in a private browser window. The page starts
+in Live mode and does not require an account.
+
+1. Paste `The Eiffel Tower is 500 metres tall.`
+2. Click **Check this text** once.
+3. Wait for the terminal result. Do not refresh while it is running.
+4. Show the claim verdict, exact evidence, corrected draft, Trust Passport, and
+   verification receipt.
+5. Click **Sample audit** only if you want to show the separately labeled deterministic
+   workflow.
+
+The hosted path accepts one factual claim and always uses Quick mode. It calls Gemini for
+structured agent decisions and Tavily for current web discovery. A Live failure stays
+visible and never inserts Sample evidence.
+
 ## Primary demo: evidence audit
 
 ### Preflight
@@ -89,12 +106,15 @@ result after every reset.
 
 ## Optional Live act
 
-Live mode requires all of the following:
+The simplest Live setup requires all of the following:
 
-- a locally installed, logged-in Claude Code CLI
-- `BRAVE_SEARCH_API_KEY` in `.env`
+- `GEMINI_API_KEY` in `.env`
+- `GEMINI_MODEL=gemini-3.1-flash-lite` in `.env`
+- `TAVILY_API_KEY` in `.env`
 - outbound DNS and HTTPS access
 - public sources that the secure fetcher can read as HTML or plain text
+
+The existing logged-in Claude Code plus `BRAVE_SEARCH_API_KEY` path is also supported.
 
 Open `http://127.0.0.1:4500/`, paste the exact document rehearsed on the presentation
 machine, choose Quick, Deep, or High-stakes, and click Verify.
@@ -118,7 +138,7 @@ observed in that rehearsal.
 
 ### Live failure handling
 
-- A missing Brave key or Claude login is a Live configuration failure.
+- Missing model or search credentials is a Live configuration failure.
 - A blocked or unreadable page is recorded as a retrieval failure.
 - One failed claim can produce a partial result while other claims finish.
 - Cancel stops the current audit. Retry clears derived output and starts the same audit
@@ -160,10 +180,13 @@ Run this twice, back to back:
 ## Primary-demo fallbacks
 
 - If Studio does not start, use `npm run verify` as the deterministic terminal surface.
-- If the model adapter hangs, check `which claude` and set `CLAUDE_CODE_PATH` to the native
+- If Gemini rejects a request, verify `GEMINI_API_KEY`, keep the Live failure visible, and
+  check the active quota in Google AI Studio.
+- If Tavily rejects a request, verify `TAVILY_API_KEY` and check the developer quota.
+- For the Claude alternative, check `which claude` and set `CLAUDE_CODE_PATH` to the native
   CLI. The x64 SDK-bundled CLI has previously hung on this arm64 Mac.
-- If Brave Search rejects requests, verify `BRAVE_SEARCH_API_KEY` and keep the Live failure
-  visible. Then open `/demo` manually.
+- If Brave Search is selected and rejects requests, verify `BRAVE_SEARCH_API_KEY` and keep
+  the Live failure visible. Then open `/demo` manually.
 - If a Live page is rejected, inspect the recorded failure. Private addresses, redirects
   to blocked addresses, oversized responses, and unsupported content types are rejected
   intentionally.

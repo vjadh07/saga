@@ -18,4 +18,4 @@ mkdirSync("docs/demo", { recursive: true });
 writeFileSync("dist/server/index.js", renderHostedDemoWorker(demo, landingPage), "utf8");
 writeFileSync("docs/index.html", landingPage, "utf8");
 writeFileSync("docs/demo/index.html", renderHostedDemoPage(demo), "utf8");
-console.log("Built the Saga landing page and public deterministic Demo.");
+console.log("Built the Saga landing page and public Live workspace with deterministic Sample audit.");

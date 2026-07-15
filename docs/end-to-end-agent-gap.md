@@ -25,7 +25,7 @@ Studio textarea
   -> guest Live audit record in SQLite
   -> in-process job
   -> AuditService
-       -> Claim Mapper through AgentSdkModelProvider
+       -> Claim Mapper through the selected ModelProvider
        -> deterministic claim assembly and limits
        -> runLiveAudit
             -> evidence contract and Research Planner
@@ -55,8 +55,8 @@ This path is implemented by `scripts/studio.ts`, `src/verify/live/http.ts`,
 | --- | --- | --- |
 | Entry point | `/` and `POST /api/audits` | `/demo` |
 | Input | Arbitrary submitted text | Committed demo document |
-| Model | Claude Agent SDK provider | None for the fixture audit |
-| Search | Brave Search provider | Labeled fixture corpus |
+| Model | Gemini provider or Claude Agent SDK provider | None for the fixture audit |
+| Search | Tavily, Brave Search, or explicitly enabled Gemini grounding | Labeled fixture corpus |
 | Pages | Secure live fetcher | Fixture content |
 | Persistence | SQLite audit store | Embedded deterministic result |
 | Failure behavior | Explicit partial, failed, or cancelled state | Unchanged deterministic fixture |
@@ -149,10 +149,10 @@ general accuracy evaluation.
 
 ### External provider smoke
 
-The real adapters exist, but deterministic tests do not prove a complete call through a
-local Claude login, Brave Search, DNS, public-page retrieval, and changing third-party
-response formats. Run and record this only when credentials and network access are
-available. A missing smoke run is a known limitation, not permission to substitute Demo.
+The real adapters exist, but deterministic tests do not prove a complete call through
+Gemini or the Claude and Brave alternative, DNS, public-page retrieval, and changing
+third-party response formats. Run and record this only when credentials and network access
+are available. A missing smoke run is a known limitation, not permission to substitute Demo.
 
 ### Process and queue durability
 

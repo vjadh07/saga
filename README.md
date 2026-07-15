@@ -25,6 +25,11 @@ npm run verify
 `npm run verify` runs the deterministic fixture audit. It needs no model login, search
 credential, or network access.
 
+The public judge workspace is https://saga-omega-seven.vercel.app/demo. Its Live path
+accepts one factual claim, runs a bounded Quick audit with Gemini and Tavily, and returns
+the evidence, corrected draft, Trust Passport, and receipt in one request. The Sample
+audit remains a separate deterministic fallback.
+
 Start the guest Studio with:
 
 ```bash
@@ -36,16 +41,27 @@ npm run studio
 - Run `npm run demo:reset` to clear local audit and transaction state. The committed Demo
   fixture is not changed.
 
-Live mode requires `BRAVE_SEARCH_API_KEY`, outbound web access, and a locally installed,
-logged-in Claude Code CLI. `CLAUDE_CODE_PATH` can override CLI discovery. The default test
-suite uses deterministic providers and does not make external calls.
+The simplest free Live setup uses a Google AI Studio key plus a Tavily developer key:
+
+```text
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-3.1-flash-lite
+TAVILY_API_KEY=...
+```
+
+Gemini handles structured reasoning and Tavily handles direct web discovery. Both offer
+limited free developer access without requiring Saga to use fixture evidence. Existing
+Claude Agent SDK and Brave Search configuration remains supported. If several search keys
+exist, Saga selects Brave first, then Tavily. Paid Gemini Search grounding is available
+only when `GEMINI_SEARCH_GROUNDING=true` is set explicitly. The default test suite uses
+deterministic providers and does not make external calls.
 
 ## Live and Demo are separate
 
 Live accepts arbitrary user text and uses only the production provider composition:
 
-- Claude Agent SDK for schema-validated structured model output
-- Brave Search for web discovery
+- Gemini or Claude Agent SDK for schema-validated structured model output
+- Tavily, Brave Search, or explicitly enabled Gemini grounding for web discovery
 - an SSRF-hardened page fetcher for retrieved pages
 - SQLite for audit state, evidence, events, final results, and receipts
 
@@ -163,9 +179,14 @@ autoscaling, authentication, or multi-tenant infrastructure are implemented.
 
 ## Known limitations
 
-- The production provider adapters are covered at their testable boundaries, but a Live
-  Claude, Brave Search, and public-page smoke run requires local credentials and network
-  access. No such smoke result should be inferred from the deterministic suite.
+- A completed provider-backed smoke run through the public endpoint composition was
+  observed locally with Gemini and Tavily. Hosted results still depend on provider quota,
+  outbound access, and reachable public pages.
+- The hosted hackathon endpoint accepts one claim in Quick mode and keeps state only for
+  the lifetime of that request. Local Studio supports multi-claim modes and SQLite refresh
+  recovery.
+- Gemini's unpaid tier may use submitted content to improve Google products. Use fictional
+  or non-sensitive text for a free-tier judge test.
 - The local worker and SQLite store are suitable for a guest hackathon demo and a
   single-node run, not a multi-instance deployment.
 - Studio progress uses polling, not Server-Sent Events.

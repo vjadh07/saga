@@ -35,9 +35,9 @@ P1 now includes:
 - current setup, product, demo, gap, and scaling documentation
 
 The external production-provider smoke test is not established by the deterministic test
-suite. It requires a working local Claude Code login, a Brave Search credential, outbound
-network access, and reachable public pages. Report it as unavailable until it is actually
-run and observed.
+suite. The simplest current free path uses Gemini for structured output and Tavily for
+web search. It still requires outbound network access and reachable public pages.
+Report the smoke run as unavailable until it is actually run and observed.
 
 ## Verify before the next change
 
@@ -51,8 +51,8 @@ npm run eval
 
 `npm run eval` is a deterministic mock-provider check. Case definitions provide only
 claims, search results, and page text. A stateless test model derives structured responses
-from each request after runner input capture. It does not validate Brave Search, the Claude
-Agent SDK, public-page retrieval, or general factual accuracy.
+from each request after runner input capture. It does not validate Gemini, Brave Search,
+the Claude Agent SDK, public-page retrieval, or general factual accuracy.
 
 For the deterministic product fallback:
 
@@ -68,8 +68,11 @@ Open `http://127.0.0.1:4500/demo`. No judge account is required.
 
 The production composition uses:
 
-- `AgentSdkModelProvider` for schema-validated Claude Agent SDK responses
-- `BraveSearchProvider` for web search
+- `GeminiModelProvider` when `GEMINI_API_KEY` is configured, otherwise the existing
+  `AgentSdkModelProvider`
+- `TavilySearchProvider` for the simplest free search path
+- `BraveSearchProvider` when a Brave key is configured, or `GeminiSearchProvider` when
+  paid grounding is enabled explicitly
 - `LivePageFetcher` for bounded, SSRF-checked page retrieval
 - `SqliteAuditStore` at `data/audits.db` by default
 - `AuditService` for state transitions, cancellation, retry, time limits, and result
@@ -85,15 +88,18 @@ failure is displayed as a Live failure and never causes a fixture result to appe
 
 ## Environment
 
-Copy `.env.example` to `.env`. Live evidence audits require:
+Copy `.env.example` to `.env`. The simplest Live evidence setup is:
 
 ```text
-BRAVE_SEARCH_API_KEY=...
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-3.1-flash-lite
+TAVILY_API_KEY=...
 ```
 
-The model provider uses the local Claude Code login. `CLAUDE_CODE_PATH` is optional when
-the native CLI is already on `PATH`. On this machine, keep the explicit native CLI lookup
-in `src/agent/run.ts`: the x64 SDK-bundled CLI has previously hung under Rosetta.
+Gemini powers schema-validated model calls and Tavily supplies direct search results. The
+existing Claude plus Brave path remains supported. `CLAUDE_CODE_PATH` is optional when the native
+CLI is already on `PATH`. On this machine, keep the explicit native CLI lookup in
+`src/agent/run.ts`: the x64 SDK-bundled CLI has previously hung under Rosetta.
 
 Useful local defaults:
 
@@ -129,6 +135,9 @@ Useful local defaults:
   numeric, dependencies, and revision
 - `src/verify/receipt.ts`: canonical receipt and verifier
 - `src/verify/providers/store-sqlite.ts`: durable local audit store
+- `src/verify/providers/model-gemini.ts`: Gemini structured-output adapter
+- `src/verify/providers/search-gemini.ts`: Gemini Google Search grounding adapter
+- `src/verify/providers/search-tavily.ts`: Tavily Search adapter
 - `src/verify/providers/search-brave.ts`: Brave Search adapter
 - `src/verify/net/fetcher.ts`: secure page fetcher
 - `src/verify/web/page.ts`: Live polling workspace and Demo result renderer
@@ -137,7 +146,10 @@ Useful local defaults:
 
 ## Known gaps after the hackathon pass
 
-- No observed external provider smoke result is claimed in this handoff.
+- A provider-backed public-endpoint smoke completed locally with Gemini and Tavily on
+  2026-07-14. Hosted behavior still depends on deployed secrets, quota, outbound access,
+  and reachable pages.
+- The hosted endpoint accepts one Quick-mode claim and is stateless across requests.
 - The local job runner is in-process. It does not survive a process crash as a managed
   queue would.
 - SQLite is local and single-node. PostgreSQL and object storage are not implemented.

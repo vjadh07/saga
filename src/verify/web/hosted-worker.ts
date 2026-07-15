@@ -3,8 +3,8 @@ import { renderStudioPage } from "./page.js";
 
 export function renderHostedDemoPage(result: AuditResult): string {
   return "<!doctype html>\n" + renderStudioPage(result, {
-    initialView: "demo",
-    hostedDemoOnly: true,
+    initialView: "live",
+    hostedLiveEndpoint: "/api/live-audit",
   });
 }
 
@@ -15,7 +15,7 @@ export function renderHostedDemoWorker(result: AuditResult, landingPage?: string
 const DEMO_HTML=${JSON.stringify(demoHtml)};
 const HTML_HEADERS={
   "cache-control":"public, max-age=300",
-  "content-security-policy":"default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+  "content-security-policy":"default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
   "content-type":"text/html; charset=utf-8",
   "referrer-policy":"no-referrer",
   "x-content-type-options":"nosniff",

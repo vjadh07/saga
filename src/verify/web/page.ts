@@ -11,6 +11,7 @@ export interface StudioPageOptions {
   initialView?: StudioInitialView;
   activeAuditId?: string | null;
   hostedDemoOnly?: boolean;
+  hostedLiveEndpoint?: string;
 }
 
 const VERDICT_CLASS: Record<VerdictKind, string> = {
@@ -77,6 +78,7 @@ type StudioResult = AuditResult | LiveAuditResult;
 export function renderStudioPage(result: StudioResult, options: StudioPageOptions = {}): string {
   const embeddedMode = result.mode === "live" ? "live" : "demo";
   const hostedDemoOnly = options.hostedDemoOnly === true;
+  const hostedLiveEndpoint = options.hostedLiveEndpoint?.trim() || null;
   const requestedView = options.initialView ?? "live";
   const initialView: StudioInitialView = hostedDemoOnly ? "demo" : embeddedMode === "live" ? "live" : requestedView;
   const resultInitiallyVisible = embeddedMode === initialView;
@@ -84,8 +86,9 @@ export function renderStudioPage(result: StudioResult, options: StudioPageOption
   const bootstrap = JSON.stringify({
     embeddedResult: result,
     initialView,
-    activeAuditId: hostedDemoOnly ? null : options.activeAuditId ?? null,
+    activeAuditId: hostedDemoOnly || hostedLiveEndpoint ? null : options.activeAuditId ?? null,
     hostedDemoOnly,
+    hostedLiveEndpoint,
   }).replace(/</g, "\\u003c");
 
   return `<meta charset="utf-8">
@@ -232,17 +235,17 @@ export function renderStudioPage(result: StudioResult, options: StudioPageOption
   <section id="live-view"${initialView === "live" ? "" : " hidden"}>
     <div class="live-intro">
       <h1>Verify before you publish.</h1>
-      <p>Paste a draft. Saga checks its factual claims against current sources, explains what needs attention, and prepares evidence-backed corrections.</p>
+      <p>${hostedLiveEndpoint ? "Enter one factual claim. Saga researches current sources, checks the evidence, and suggests a correction when needed." : "Paste a draft. Saga checks its factual claims against current sources, explains what needs attention, and prepares evidence-backed corrections."}</p>
     </div>
     <div class="composer">
       <label class="input-label" for="intext">Text to verify</label>
-      <textarea id="intext" placeholder="Paste an AI-written report, article, or draft."></textarea>
+      <textarea id="intext" placeholder="${hostedLiveEndpoint ? "Example: The Eiffel Tower is 500 metres tall." : "Paste an AI-written report, article, or draft."}"></textarea>
       <div class="inputctl">
-        <fieldset class="modes"><legend>Audit depth</legend>
+        ${hostedLiveEndpoint ? '<p class="note">One claim per check. Live checks use Quick mode.</p>' : `<fieldset class="modes"><legend>Audit depth</legend>
           <label><input type="radio" name="mode" value="quick"> Quick</label>
           <label><input type="radio" name="mode" value="deep" checked> Deep</label>
           <label><input type="radio" name="mode" value="high_stakes"> Most thorough</label>
-        </fieldset>
+        </fieldset>`}
         <button type="button" id="run" class="btn btn-run">Check this text</button>
       </div>
       <div class="live-state">
@@ -353,6 +356,7 @@ export function renderStudioPage(result: StudioResult, options: StudioPageOption
 <script>
 const BOOT=JSON.parse(document.getElementById("studio-bootstrap").textContent);
 const HOSTED_DEMO_ONLY=BOOT.hostedDemoOnly===true;
+const HOSTED_LIVE_ENDPOINT=typeof BOOT.hostedLiveEndpoint==="string"&&BOOT.hostedLiveEndpoint?BOOT.hostedLiveEndpoint:null;
 const VCLASS=${JSON.stringify(VERDICT_CLASS)};
 const LABEL=${JSON.stringify(labels)};
 const DOCUMENT_STATUS=${JSON.stringify(DOCUMENT_STATUS_LABELS)};
@@ -394,6 +398,7 @@ let currentResult=null;
 let currentStored=null;
 let activeAuditId=BOOT.activeAuditId;
 let pollGeneration=0;
+let hostedController=null;
 const embeddedDemo=BOOT.embeddedResult && BOOT.embeddedResult.mode==="demo" ? BOOT.embeddedResult : null;
 const embeddedLive=BOOT.embeddedResult && BOOT.embeddedResult.mode==="live" ? BOOT.embeddedResult : null;
 if(embeddedLive) currentResult=embeddedLive;
@@ -593,7 +598,7 @@ function updateLiveHeader(record){
 }
 function showLiveFailure(message){
   liveError.textContent=(message?message+" ":"")+"Live audit failed. Demo mode was not substituted.";
-  liveError.hidden=false;runButton.disabled=false;cancelButton.hidden=true;retryButton.hidden=false;
+  liveError.hidden=false;runButton.disabled=false;cancelButton.hidden=true;retryButton.hidden=Boolean(HOSTED_LIVE_ENDPOINT);
   if(currentView==="live")setHeader("Live audit failed","bad");
 }
 function showInputError(message){
@@ -609,7 +614,7 @@ function renderStored(stored,suppressStaleFailure){
   document.getElementById("live-events-wrap").hidden=false;
   renderEventList(document.getElementById("live-events"),events,"No persisted events yet.");
   const terminal=TERMINAL.has(stored.record.status);
-  runButton.disabled=!terminal;cancelButton.hidden=terminal;retryButton.hidden=stored.record.status!=="failed"&&stored.record.status!=="cancelled";
+  runButton.disabled=!terminal;cancelButton.hidden=terminal;retryButton.hidden=Boolean(HOSTED_LIVE_ENDPOINT)||(stored.record.status!=="failed"&&stored.record.status!=="cancelled");
   liveError.hidden=true;
   if(stored.result&&!suppressStaleFailure){
     if(typeof stored.result!=="object"||stored.result.mode!=="live"||stored.result.auditId!==stored.record.id)throw new Error("The stored result is not a valid live audit result.");
@@ -656,18 +661,30 @@ runButton.addEventListener("click",async()=>{
   const documentText=document.getElementById("intext").value;
   if(!documentText.trim()){showInputError("Paste some text first.");return;}
   const selected=document.querySelector('input[name="mode"]:checked');
-  const mode=selected?selected.value:"deep";
+  const mode=HOSTED_LIVE_ENDPOINT?"quick":selected?selected.value:"deep";
   pollGeneration++;currentResult=null;currentStored=null;resultView.hidden=true;liveError.hidden=true;runButton.disabled=true;cancelButton.hidden=false;retryButton.hidden=true;
-  liveStatus.textContent="Submitting live audit.";setHeader("Submitting live audit","");
+  liveStatus.textContent=HOSTED_LIVE_ENDPOINT?"Checking current sources. This can take about a minute.":"Submitting live audit.";setHeader(HOSTED_LIVE_ENDPOINT?"Checking current sources":"Submitting live audit","");
   try{
+    if(HOSTED_LIVE_ENDPOINT){
+      hostedController=new AbortController();
+      const stored=await apiRequest(HOSTED_LIVE_ENDPOINT,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({document:documentText,mode:"quick"}),signal:hostedController.signal});
+      if(!stored||!stored.record||!TERMINAL.has(stored.record.status))throw new Error("The hosted live endpoint returned an invalid audit result.");
+      renderStored(stored);
+      return;
+    }
     const created=await apiRequest("/api/audits",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({document:documentText,mode})});
     if(!created||!created.audit||created.audit.mode!=="live"||typeof created.audit.id!=="string")throw new Error("The live endpoint returned an invalid audit record.");
     activeAuditId=created.audit.id;setAuditUrl(activeAuditId);
     renderStored({record:created.audit,claims:[],evidence:[],events:[],result:null});
     beginPolling(activeAuditId,0);
-  }catch(error){showLiveFailure(error instanceof Error?error.message:String(error))}
+  }catch(error){
+    if(error&&error.name==="AbortError"){
+      liveStatus.textContent="Audit cancelled.";runButton.disabled=false;cancelButton.hidden=true;retryButton.hidden=true;setHeader("Cancelled","bad");
+    }else showLiveFailure(error instanceof Error?error.message:String(error));
+  }finally{hostedController=null}
 });
 cancelButton.addEventListener("click",async()=>{
+  if(HOSTED_LIVE_ENDPOINT){if(hostedController)hostedController.abort();return;}
   if(!activeAuditId)return;cancelButton.disabled=true;
   try{
     pollGeneration++;
@@ -686,7 +703,7 @@ retryButton.addEventListener("click",async()=>{
 });
 
 updateModeControls();
-const queryAuditId=HOSTED_DEMO_ONLY?null:new URLSearchParams(window.location.search).get("audit");
+const queryAuditId=HOSTED_DEMO_ONLY||HOSTED_LIVE_ENDPOINT?null:new URLSearchParams(window.location.search).get("audit");
 if(queryAuditId){activeAuditId=queryAuditId;currentView="live";setView("live");beginPolling(queryAuditId,0)}
 else if(!HOSTED_DEMO_ONLY&&activeAuditId){currentView="live";setAuditUrl(activeAuditId);setView("live");beginPolling(activeAuditId,0)}
 else if(embeddedLive){setView("live")}

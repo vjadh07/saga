@@ -31,7 +31,7 @@ function liveResult(base: AuditResult = demo): LiveAuditResult {
   } as unknown as LiveAuditResult;
 }
 
-function bootstrap(html: string): { embeddedResult: AuditResult | LiveAuditResult; initialView: string; activeAuditId: string | null; hostedDemoOnly: boolean } {
+function bootstrap(html: string): { embeddedResult: AuditResult | LiveAuditResult; initialView: string; activeAuditId: string | null; hostedDemoOnly: boolean; hostedLiveEndpoint: string | null } {
   const match = html.match(/<script id="studio-bootstrap" type="application\/json">([\s\S]*?)<\/script>/);
   expect(match).not.toBeNull();
   return JSON.parse(match![1]!.replace(/\\u003c/g, "<"));
@@ -76,6 +76,27 @@ test("the hosted public page is a clearly labeled Demo and cannot enter Live mod
   expect(html).toContain("Live research is available when Saga is run from the repository with provider credentials.");
   expect(html).not.toMatch(/id="result-view"[^>]*hidden/);
   expect(html).toContain('if(HOSTED_DEMO_ONLY&&view==="live")return;');
+});
+
+test("the hosted Live page submits one claim to the synchronous public endpoint", () => {
+  const html = renderStudioPage(demo, { initialView: "live", hostedLiveEndpoint: "/api/live-audit" });
+  const data = bootstrap(html);
+  const visibleMarkup = html.split('<script id="studio-bootstrap"')[0];
+
+  expect(data.initialView).toBe("live");
+  expect(data.hostedLiveEndpoint).toBe("/api/live-audit");
+  expect(data.activeAuditId).toBeNull();
+  expect(html).toContain('id="view-live" aria-pressed="true"');
+  expect(html).not.toContain('id="view-live" aria-pressed="true" disabled');
+  expect(visibleMarkup).toContain("Enter one factual claim.");
+  expect(visibleMarkup).toContain("One claim per check. Live checks use Quick mode.");
+  expect(visibleMarkup).not.toContain("> Deep<");
+  expect(visibleMarkup).not.toContain("> Most thorough<");
+  expect(html).toContain('apiRequest(HOSTED_LIVE_ENDPOINT');
+  expect(html).toContain('body:JSON.stringify({document:documentText,mode:"quick"})');
+  expect(html).toContain("new AbortController()");
+  expect(html).toContain("hostedController.abort()");
+  expect(html).toContain('retryButton.hidden=Boolean(HOSTED_LIVE_ENDPOINT)');
 });
 
 test("a live-only result routes the Demo control to the deterministic guest demo", () => {

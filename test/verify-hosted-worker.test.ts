@@ -15,7 +15,7 @@ const demo = runAudit({
 
 const landingPage = readFileSync(new URL("../site/index.html", import.meta.url), "utf8");
 
-test("the hosted worker serves the landing page, public Demo, and no Live API", async () => {
+test("the hosted worker serves the landing page and Live-enabled public workspace", async () => {
   const source = renderHostedDemoWorker(demo, landingPage);
   const sandbox: Record<string, unknown> = { Request, Response, URL };
   new Script(source.replace("export default", "globalThis.__worker =")).runInNewContext(sandbox);
@@ -32,8 +32,9 @@ test("the hosted worker serves the landing page, public Demo, and no Live API", 
   expect(demoResponse.status).toBe(200);
   const demoHtml = await demoResponse.text();
   expect(demoHtml).toContain("Demo: fixed fictional example.");
-  expect(demoHtml).toContain('"hostedDemoOnly":true');
-  expect(demoResponse.headers.get("content-security-policy")).toContain("connect-src 'none'");
+  expect(demoHtml).toContain('"hostedLiveEndpoint":"/api/live-audit"');
+  expect(demoHtml).toContain('id="view-live" aria-pressed="true"');
+  expect(demoResponse.headers.get("content-security-policy")).toContain("connect-src 'self'");
   expect(demoResponse.headers.get("content-security-policy")).toContain("font-src 'self' data:");
 
   const missing = worker.fetch(new Request("https://saga.example/api/audits"));

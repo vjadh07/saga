@@ -1,17 +1,15 @@
 // Serve Saga Studio with a persistent Live workflow and an explicit deterministic Demo.
-// Live audits use the Agent SDK model, Brave Search, the SSRF-hardened page fetcher, and
-// SQLite persistence. A failed or unconfigured Live provider never switches to Demo.
+// Live audits use configured provider adapters, the SSRF-hardened page fetcher, and SQLite
+// persistence. A failed or unconfigured Live provider never switches provider or to Demo.
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { runAudit } from "../src/verify/pipeline.js";
 import { DEMO_CLAIMS, DEMO_CORPUS, DEMO_DOCUMENT, DEMO_NOW, demoAuditId } from "../src/verify/fixtures/demo.js";
 import { createLiveAuditService } from "../src/verify/live/composition.js";
 import { createAuditApiServer } from "../src/verify/live/http.js";
+import { createLiveProviders, UnconfiguredLiveSearch } from "../src/verify/live/provider-selection.js";
 import type { CostRates } from "../src/verify/live/resources.js";
 import { LivePageFetcher } from "../src/verify/net/fetcher.js";
-import { AgentSdkModelProvider } from "../src/verify/providers/model-agent.js";
-import { BraveSearchProvider } from "../src/verify/providers/search-brave.js";
-import type { SearchProvider, SearchRequest, SearchResult } from "../src/verify/providers/search.js";
 import { SqliteAuditStore } from "../src/verify/providers/store-sqlite.js";
 import { createStudioFallback } from "../src/verify/web/studio-server.js";
 
@@ -19,14 +17,6 @@ try {
   process.loadEnvFile();
 } catch {
   // A local .env file is optional.
-}
-
-class UnconfiguredLiveSearch implements SearchProvider {
-  readonly id = "unconfigured-live-search";
-
-  async search(_request: SearchRequest): Promise<SearchResult[]> {
-    throw new Error("Live search credentials are not configured. Set BRAVE_SEARCH_API_KEY.");
-  }
 }
 
 const demo = runAudit({
@@ -40,14 +30,12 @@ const demo = runAudit({
 const databasePath = process.env.AUDIT_DB_PATH?.trim() || "data/audits.db";
 mkdirSync(dirname(resolve(databasePath)), { recursive: true });
 const store = new SqliteAuditStore(databasePath);
-const search = process.env.BRAVE_SEARCH_API_KEY?.trim()
-  ? new BraveSearchProvider({ apiKey: process.env.BRAVE_SEARCH_API_KEY })
-  : new UnconfiguredLiveSearch();
+const providers = createLiveProviders(process.env);
 const costRates = readCostRates();
 const service = createLiveAuditService({
   store,
-  model: new AgentSdkModelProvider(),
-  search,
+  model: providers.model,
+  search: providers.search,
   fetcher: new LivePageFetcher(),
   ...(costRates ? { resourceOptions: { costRates } } : {}),
   serviceOptions: {
@@ -71,8 +59,10 @@ const port = readPort(process.env.STUDIO_PORT);
 server.listen(port, "127.0.0.1", () => {
   console.log(`Saga Studio on http://127.0.0.1:${port}`);
   console.log(`Deterministic guest demo on http://127.0.0.1:${port}/demo`);
-  if (search instanceof UnconfiguredLiveSearch) {
-    console.warn("Live audits require BRAVE_SEARCH_API_KEY. Demo mode remains available.");
+  console.log(`Live model: ${providers.model.id}`);
+  console.log(`Live search: ${providers.search.id}`);
+  if (providers.search instanceof UnconfiguredLiveSearch) {
+    console.warn("Live search requires TAVILY_API_KEY or BRAVE_SEARCH_API_KEY. Demo mode remains available.");
   }
 });
 

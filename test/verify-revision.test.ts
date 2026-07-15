@@ -253,6 +253,23 @@ test("reviseChange falls back to polished evidence prose when model prose is inv
   expect(change!.citations).toEqual(["e1"]);
 });
 
+test("reviseChange keeps a complete cited sentence with commas as the deterministic fallback", async () => {
+  const cited: Evidence = {
+    ...evidence[0]!,
+    excerpt: "The Eiffel Tower reached a height of 330 meters in March 2022, according to the official site",
+  };
+  const change = await reviseChange({
+    claim,
+    verdict: verdict("contradicted", "Correct the height."),
+    evidence: [cited],
+    model: new MockModelProvider({}),
+  });
+
+  expect(change!.source).toBe("deterministic_revision");
+  expect(change!.replacement).toBe("The Eiffel Tower reached a height of 330 meters in March 2022, according to the official site.");
+  expect(change!.citations).toEqual(["e1"]);
+});
+
 test("contract-limited support falls back to polished citation-grounded qualified prose", async () => {
   const supporting: Evidence = {
     ...evidence[0]!,

@@ -25,7 +25,7 @@ const RawClaimSchema = z.object({
 }).strict();
 
 const ClaimMapOutputSchema = z.object({
-  claims: z.array(RawClaimSchema).max(50),
+  claims: z.array(RawClaimSchema).max(12),
 }).strict();
 
 export interface RawClaim {
@@ -73,12 +73,13 @@ export function assembleClaims(document: string, raw: RawClaim[]): Claim[] {
   return [...byId.values()].sort((a, b) => a.location.start - b.location.start);
 }
 
-export async function mapClaimsWithModel(document: string, model: ModelProvider): Promise<Claim[]> {
+export async function mapClaimsWithModel(document: string, model: ModelProvider, signal?: AbortSignal): Promise<Claim[]> {
   const output = await model.generateStructured({
     purpose: "claim_mapper",
     system: MAPPER_PROMPT,
     prompt: `Document to map exactly as provided:\n\n${document}`,
     schema: ClaimMapOutputSchema,
+    signal,
   });
   return assembleClaims(document, output.claims);
 }

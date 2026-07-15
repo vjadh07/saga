@@ -85,7 +85,9 @@ function groundingSegments(text: string): string[] {
 
 function matchesGrounding(replacement: string, grounding: string): boolean {
   const sequence = factualTokens(replacement);
-  return sequence.length > 0 && groundingSegments(grounding).some((segment) =>
+  if (sequence.length === 0) return false;
+  if (matchesCompleteGrounding(replacement, grounding)) return true;
+  return groundingSegments(grounding).some((segment) =>
     isContiguousSequence(sequence, factualTokens(segment)) && preservesCriticalQualifiers(replacement, segment));
 }
 
@@ -282,7 +284,7 @@ const PROMPT = `You are the Revision Agent for Saga. Replace one audited sentenc
 Return one or two concise sentences. Cite every evidence excerpt used. Reuse the factual wording and order of the cited excerpts. Preserve negations, limits, and qualifiers. Do not add facts, numbers, signs, units, or editorial placeholders. If a deterministic numeric trace is supplied, you may state its verified computed result.`;
 
 function polishedExcerpt(excerpt: string): string | null {
-  if (PLACEHOLDER.test(excerpt) || groundingSegments(excerpt).length !== 1) return null;
+  if (PLACEHOLDER.test(excerpt) || /[;:]/.test(excerpt) || splitSentences(excerpt).length !== 1) return null;
   let text = excerpt.replace(/\s+/g, " ").trim().replace(/[,;:]$/, "");
   const firstWord = text.match(/^[a-z]+\b/)?.[0];
   if (firstWord && firstWord === firstWord.toLocaleLowerCase("en-US")) text = `${text[0]!.toLocaleUpperCase("en-US")}${text.slice(1)}`;

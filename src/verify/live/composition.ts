@@ -17,7 +17,7 @@ export interface LiveAuditCompositionOptions {
   search: SearchProvider;
   fetcher: PageFetcher;
   now?: () => string;
-  mapper?: (document: string, model: ModelProvider) => Promise<Claim[]>;
+  mapper?: (document: string, model: ModelProvider, signal?: AbortSignal) => Promise<Claim[]>;
   mappingModelCalls?: number;
   resourceOptions?: Omit<AuditResourceOptions, "signal">;
   serviceOptions?: AuditServiceOptions;
@@ -30,7 +30,7 @@ export function createLiveAuditService(options: LiveAuditCompositionOptions): Au
   return new AuditService(options.store, {
     async mapClaims(document, { signal }) {
       signal.throwIfAborted();
-      const claims = await mapper(document, options.model);
+      const claims = await mapper(document, options.model, signal);
       signal.throwIfAborted();
       return claims;
     },

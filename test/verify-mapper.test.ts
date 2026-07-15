@@ -83,3 +83,27 @@ test("mapClaimsWithModel rejects invalid model fields at the schema boundary", a
   });
   await expect(mapClaimsWithModel(DOC, model)).rejects.toThrow();
 });
+
+test("mapClaimsWithModel caps mapped claims at the workflow maximum", async () => {
+  const claims = Array.from({ length: 13 }, (_, index) => ({
+    originalText: `Claim ${index + 1}.`,
+    normalized: `claim ${index + 1}`,
+    claimType: "general",
+    verifiable: true,
+    timeSensitive: false,
+    risk: "low",
+    asOf: null,
+  }));
+  const model = new MockModelProvider({ claim_mapper: [{ claims }] });
+
+  await expect(mapClaimsWithModel(claims.map((claim) => claim.originalText).join(" "), model))
+    .rejects.toThrow();
+});
+
+test("mapClaimsWithModel passes cancellation to the model boundary", async () => {
+  const controller = new AbortController();
+  controller.abort(new Error("mapping cancelled"));
+  const model = new MockModelProvider({ claim_mapper: [{ claims: [] }] });
+
+  await expect(mapClaimsWithModel(DOC, model, controller.signal)).rejects.toThrow(/mapping cancelled/i);
+});

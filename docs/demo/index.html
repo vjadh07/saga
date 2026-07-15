@@ -136,7 +136,7 @@
     <button type="button" id="view-demo" aria-pressed="true">Sample audit</button>
   </div>
   <span id="modebadge" class="modebadge demo">Demo mode</span>
-  <span id="status" class="status">Public sample audit</span>
+  <span id="status" class="status">Sample result</span>
 </div></header>
 
 <main class="wrap">
@@ -335,7 +335,7 @@ function setView(view){
     if(embeddedDemo){
       renderAuditResult(embeddedDemo,"demo");
       resultView.hidden=false;
-      setHeader(statusLabel(embeddedDemo.passport.documentStatus),resultKind(embeddedDemo));
+      setHeader(HOSTED_DEMO_ONLY?"Sample result":statusLabel(embeddedDemo.passport.documentStatus),HOSTED_DEMO_ONLY?"":resultKind(embeddedDemo));
     }else{
       window.location.assign("/demo");
     }

@@ -71,7 +71,8 @@ test("the hosted public page is a clearly labeled Demo and cannot enter Live mod
   expect(data.hostedDemoOnly).toBe(true);
   expect(data.activeAuditId).toBeNull();
   expect(html).toContain('id="view-live" aria-pressed="false" disabled aria-disabled="true"');
-  expect(html).toContain("Public sample audit");
+  expect(html).toContain("Sample result");
+  expect(html).toContain('setHeader(HOSTED_DEMO_ONLY?"Sample result":statusLabel(embeddedDemo.passport.documentStatus)');
   expect(html).toContain("Live research is available when Saga is run from the repository with provider credentials.");
   expect(html).not.toMatch(/id="result-view"[^>]*hidden/);
   expect(html).toContain('if(HOSTED_DEMO_ONLY&&view==="live")return;');

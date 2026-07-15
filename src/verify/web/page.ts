@@ -225,7 +225,7 @@ export function renderStudioPage(result: StudioResult, options: StudioPageOption
     <button type="button" id="view-demo" aria-pressed="${initialView === "demo"}">Sample audit</button>
   </div>
   <span id="modebadge" class="modebadge ${initialView}">${initialView === "demo" ? "Demo mode" : "Live mode"}</span>
-  <span id="status" class="status">${hostedDemoOnly ? "Public sample audit" : initialView === "demo" ? "Deterministic demo audit" : embeddedMode === "live" ? "Live result loaded" : "Live mode ready"}</span>
+  <span id="status" class="status">${hostedDemoOnly ? "Sample result" : initialView === "demo" ? "Deterministic demo audit" : embeddedMode === "live" ? "Live result loaded" : "Live mode ready"}</span>
 </div></header>
 
 <main class="wrap">
@@ -424,7 +424,7 @@ function setView(view){
     if(embeddedDemo){
       renderAuditResult(embeddedDemo,"demo");
       resultView.hidden=false;
-      setHeader(statusLabel(embeddedDemo.passport.documentStatus),resultKind(embeddedDemo));
+      setHeader(HOSTED_DEMO_ONLY?"Sample result":statusLabel(embeddedDemo.passport.documentStatus),HOSTED_DEMO_ONLY?"":resultKind(embeddedDemo));
     }else{
       window.location.assign("/demo");
     }
